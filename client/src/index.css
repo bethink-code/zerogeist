@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+:root {
+  --zg-teal: #2dd4a8;
+  --zg-dark: #0a0a0a;
+  --zg-muted: #737373;
+  --zg-border: #262626;
+  --zg-surface: #141414;
+  --zg-anger: #ef4444;
+  --zg-hope: #2dd4bf;
+  --zg-fear: #3b82f6;
+  --zg-joy: #f59e0b;
+  --zg-grief: #a855f7;
+}
+
+body {
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  background-color: var(--zg-dark);
+  color: #fafafa;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}

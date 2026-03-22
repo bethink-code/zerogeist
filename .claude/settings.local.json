@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx drizzle-kit:*)",
+      "Bash(npx tsx:*)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(taskkill //F //IM tsx.exe)",
+      "Bash(mkdir -p api)",
+      "Bash(npm run:*)",
+      "Read(//c/Users/xumlu/.claude/skills/scaffold-project/**)",
+      "Edit(~/.claude/skills/scaffold-project/**)",
+      "Bash(curl -s http://localhost:5000/api/admin/health)",
+      "Bash(node -e \":*)",
+      "Bash(netstat -ano)"
+    ]
+  }
+}
