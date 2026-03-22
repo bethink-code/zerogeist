@@ -7,6 +7,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import * as storage from "../storage.js";
 
 const client = new Anthropic();
 
@@ -111,15 +112,18 @@ Only use "national" if there is genuinely NO geographic signal — the post disc
     return `[${i + 1}] (${attribution}) ${p.title ? p.title + ": " : ""}${p.body.slice(0, 300)}${engagement}`;
   }).join("\n\n");
 
-  const prompt = `You are analysing South African social media and news posts for geographic and emotional content.
+  // Load custom prompt from DB, fall back to default
+  const customPrompt = await storage.getSystemPrompt("haiku_summarise");
 
-${provinceContext}
+  const defaultPrompt = `You are analysing South African social media and news posts for geographic and emotional content.
+
+\${provinceContext}
 
 Province codes: GP (Gauteng), WC (Western Cape), KZN (KwaZulu-Natal), EC (Eastern Cape), FS (Free State), NW (North West), NC (Northern Cape), MP (Mpumalanga), LP (Limpopo).
 
 Posts to analyse:
 
-${postsText}
+\${postsText}
 
 For each post, return a JSON object with:
 - "index": the post number (1-based)
@@ -132,6 +136,11 @@ For each post, return a JSON object with:
 - "voice_text": if voice_worthy, a 1-2 sentence paraphrase that captures the sentiment. Never a direct quote. Include enough context to understand the voice without seeing the original.
 
 Return a JSON array of objects. Return ONLY the JSON array, no markdown.`;
+
+  const promptTemplate = customPrompt?.prompt || defaultPrompt;
+  const prompt = promptTemplate
+    .replace("${provinceContext}", provinceContext)
+    .replace("${postsText}", postsText);
 
   const response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",

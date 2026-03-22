@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
 import { Link } from "wouter";
 
-type Tab = "persons" | "sources" | "health";
+type Tab = "persons" | "sources" | "health" | "prompts";
 
 export default function Admin() {
   const [tab, setTab] = useState<Tab>("persons");
@@ -22,7 +22,7 @@ export default function Admin() {
       <div className="max-w-5xl mx-auto px-6 py-8">
         {/* Tabs */}
         <div className="flex gap-6 border-b border-[var(--zg-border)] mb-8">
-          {(["persons", "sources", "health"] as Tab[]).map((t) => (
+          {(["persons", "sources", "health", "prompts"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -32,7 +32,7 @@ export default function Admin() {
                   : "text-[var(--zg-muted)] hover:text-white"
               }`}
             >
-              {t === "persons" ? "Invited Persons" : t === "sources" ? "Source Registry" : "Platform Health"}
+              {t === "persons" ? "Invited Persons" : t === "sources" ? "Source Registry" : t === "health" ? "Platform Health" : "AI Prompts"}
             </button>
           ))}
         </div>
@@ -40,6 +40,7 @@ export default function Admin() {
         {tab === "persons" && <PersonsTab />}
         {tab === "sources" && <SourcesTab />}
         {tab === "health" && <HealthTab />}
+        {tab === "prompts" && <PromptsTab />}
       </div>
     </div>
   );
@@ -494,6 +495,135 @@ function HealthTab() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Prompts Tab ────────────────────────────────────────
+function PromptsTab() {
+  const queryClient = useQueryClient();
+
+  const { data: prompts = [], isLoading } = useQuery({
+    queryKey: ["admin-prompts"],
+    queryFn: () => apiRequest("/api/admin/prompts"),
+  });
+
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+
+  const saveMutation = useMutation({
+    mutationFn: ({ id, prompt }: { id: string; prompt: string }) =>
+      apiRequest(`/api/admin/prompts/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          name: id === "haiku_summarise" ? "Haiku Summariser" : "Sonnet Synthesiser",
+          description: id === "haiku_summarise"
+            ? "Analyses each post batch: geo-attribution, emotion, themes, voice extraction"
+            : "Synthesises the world snapshot from summaries: weather digest, province emotions, themes",
+          prompt,
+        }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-prompts"] });
+      setEditing(null);
+    },
+  });
+
+  // Default prompts for initial seeding
+  const DEFAULTS: Record<string, { name: string; description: string }> = {
+    haiku_summarise: {
+      name: "Haiku Summariser",
+      description: "Analyses each post batch: geo-attribution, emotion, themes, voice extraction (runs ~8 times per cycle)",
+    },
+    sonnet_synthesise: {
+      name: "Sonnet Synthesiser",
+      description: "Synthesises the world snapshot from summaries: weather digest, province emotions, themes (runs once per cycle)",
+    },
+  };
+
+  const promptMap = new Map(prompts.map((p: any) => [p.id, p]));
+
+  if (isLoading) return <p className="text-[var(--zg-muted)] text-sm">Loading...</p>;
+
+  return (
+    <div className="space-y-6">
+      <p className="text-xs text-[var(--zg-muted)]">
+        These prompts are the brain of the system. Haiku does mechanical extraction (cheap, per-batch).
+        Sonnet does creative synthesis (the weather metaphors). Changes take effect on the next cycle run.
+      </p>
+
+      {Object.entries(DEFAULTS).map(([id, meta]) => {
+        const saved = promptMap.get(id);
+        const isEditing = editing === id;
+        const currentPrompt = saved?.prompt || "(using default from code — click Edit to customise)";
+
+        return (
+          <div key={id} className="bg-[var(--zg-surface)] border border-[var(--zg-border)] rounded-lg p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium">{meta.name}</h3>
+                <p className="text-xs text-[var(--zg-muted)] mt-0.5">{meta.description}</p>
+              </div>
+              <div className="flex gap-2">
+                {!isEditing ? (
+                  <button
+                    onClick={() => {
+                      setEditing(id);
+                      setEditValue(saved?.prompt || "");
+                    }}
+                    className="text-xs px-3 py-1 bg-[var(--zg-dark)] border border-[var(--zg-border)] rounded hover:border-[var(--zg-teal)] transition-colors"
+                  >
+                    {saved ? "Edit" : "Customise"}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => saveMutation.mutate({ id, prompt: editValue })}
+                      disabled={saveMutation.isPending}
+                      className="text-xs px-3 py-1 bg-[var(--zg-teal)] text-[var(--zg-dark)] rounded font-medium"
+                    >
+                      {saveMutation.isPending ? "Saving..." : "Save"}
+                    </button>
+                    <button
+                      onClick={() => setEditing(null)}
+                      className="text-xs px-3 py-1 text-[var(--zg-muted)] hover:text-white"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {isEditing ? (
+              <div className="space-y-2">
+                <textarea
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  className="w-full bg-[var(--zg-dark)] border border-[var(--zg-border)] rounded-lg p-4 text-sm text-white font-mono resize-y focus:outline-none focus:border-[var(--zg-teal)] transition-colors"
+                  style={{ minHeight: "300px" }}
+                  placeholder="Enter the prompt template. Use ${provinceContext}, ${postsText}, ${provinceSummaryText} etc. as placeholders — they'll be filled in at runtime."
+                />
+                <p className="text-[10px] text-[var(--zg-muted)]">
+                  {editValue.length} characters · Changes apply on next cycle run
+                </p>
+              </div>
+            ) : (
+              <div className="bg-[var(--zg-dark)] rounded-lg p-4 max-h-48 overflow-y-auto">
+                <pre className="text-xs text-[var(--zg-muted)] whitespace-pre-wrap font-mono leading-relaxed">
+                  {currentPrompt}
+                </pre>
+              </div>
+            )}
+
+            {saved?.updatedAt && (
+              <p className="text-[10px] text-[var(--zg-muted)]">
+                Last updated: {new Date(saved.updatedAt).toLocaleString()}
+              </p>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

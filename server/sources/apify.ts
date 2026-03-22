@@ -17,6 +17,7 @@ const CACHE_DIR = path.join(process.cwd(), "data");
 export interface ApifyPost {
   text: string;
   author: string;
+  authorLocation: string | null; // user's profile location — free geo signal
   likes: number;
   retweets: number;
   replies: number;
@@ -186,6 +187,7 @@ export async function fetchTwitter(): Promise<{
         return {
           text: item.text,
           author: item.author?.userName || "unknown",
+          authorLocation: item.author?.location || null,
           likes: item.likeCount || 0,
           retweets: item.retweetCount || 0,
           replies: item.replyCount || 0,

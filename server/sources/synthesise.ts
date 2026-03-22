@@ -10,6 +10,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import * as storage from "../storage.js";
 
 const client = new Anthropic();
 
@@ -149,13 +150,16 @@ export async function synthesiseWorld(
 ): Promise<WorldAnalysis> {
   const provinceSummaryText = buildProvinceSummaries(summaries);
 
-  const prompt = `You are the synthesis engine for Zerogeist — a platform that reads South Africa's emotional weather daily.
+  // Load custom prompt from DB, fall back to default
+  const customPrompt = await storage.getSystemPrompt("sonnet_synthesise");
 
-You have pre-analysed summaries of ${totalRawPosts} South African posts from Reddit, Twitter/X, ReliefWeb, and PMG. The posts have already been geo-attributed, emotionally scored, and voices extracted by a prior analysis stage. Your job is creative synthesis — weave the data into weather.
+  const defaultPrompt = `You are the synthesis engine for Zerogeist — a platform that reads South Africa's emotional weather daily.
+
+You have pre-analysed summaries of \${totalRawPosts} South African posts from Reddit, Twitter/X, ReliefWeb, and PMG. The posts have already been geo-attributed, emotionally scored, and voices extracted by a prior analysis stage. Your job is creative synthesis — weave the data into weather.
 
 ## Pre-Analysed Province Data
 
-${provinceSummaryText}
+\${provinceSummaryText}
 
 ## Output Requirements
 
@@ -193,6 +197,11 @@ Include ALL 9 provinces. Rules:
 - National/unattributed voices can be distributed to provinces where they thematically fit.
 
 Return ONLY the JSON object, no markdown.`;
+
+  const promptTemplate = customPrompt?.prompt || defaultPrompt;
+  const prompt = promptTemplate
+    .replace("${totalRawPosts}", String(totalRawPosts))
+    .replace("${provinceSummaryText}", provinceSummaryText);
 
   try {
     const response = await client.messages.create({

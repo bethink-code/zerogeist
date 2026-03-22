@@ -30,6 +30,7 @@ __export(schema_exports, {
   sourceRegionEnum: () => sourceRegionEnum,
   sourceRunStatusEnum: () => sourceRunStatusEnum,
   sourceTypeEnum: () => sourceTypeEnum,
+  systemPrompt: () => systemPrompt,
   worldSnapshot: () => worldSnapshot
 });
 import {
@@ -44,7 +45,7 @@ import {
   date,
   pgEnum
 } from "drizzle-orm/pg-core";
-var questionTerritoryEnum, answerToneEnum, sourceTypeEnum, sourceRegionEnum, sourceRunStatusEnum, proxyEditFieldEnum, emotionEnum, person, invitedPerson, proxy, question, worldSnapshot, personWorld, source, personSource, proxyEdit, rawPost, postSummary, sessions, dailyCycleLog;
+var questionTerritoryEnum, answerToneEnum, sourceTypeEnum, sourceRegionEnum, sourceRunStatusEnum, proxyEditFieldEnum, emotionEnum, person, invitedPerson, proxy, question, worldSnapshot, personWorld, source, personSource, proxyEdit, rawPost, postSummary, systemPrompt, sessions, dailyCycleLog;
 var init_schema = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -241,6 +242,15 @@ var init_schema = __esm({
       voiceAttribution: text("voice_attribution"),
       batchId: text("batch_id")
     });
+    systemPrompt = pgTable("system_prompt", {
+      id: text("id").primaryKey(),
+      // "haiku_summarise" | "sonnet_synthesise"
+      name: text("name").notNull(),
+      description: text("description"),
+      prompt: text("prompt").notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().notNull(),
+      updatedBy: text("updated_by").references(() => person.id)
+    });
     sessions = pgTable("session", {
       sid: text("sid").primaryKey(),
       sess: jsonb("sess").notNull(),
@@ -403,12 +413,34 @@ async function getActiveSourceCount() {
 async function getAllActivePersons() {
   return db.select().from(person);
 }
+async function getSystemPrompt(id) {
+  const [row] = await db.select().from(systemPrompt).where(eq2(systemPrompt.id, id));
+  return row || null;
+}
+async function getAllSystemPrompts() {
+  return db.select().from(systemPrompt).orderBy(systemPrompt.id);
+}
+async function upsertSystemPrompt(id, data) {
+  const existing = await getSystemPrompt(id);
+  if (existing) {
+    const [row2] = await db.update(systemPrompt).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq2(systemPrompt.id, id)).returning();
+    return row2;
+  }
+  const [row] = await db.insert(systemPrompt).values({ id, ...data }).returning();
+  return row;
+}
 function inferProvinceHint(post) {
   if (post.sourceType === "reddit" && post.metadata?.subreddit) {
     return PROVINCE_HINTS[post.metadata.subreddit.toLowerCase()] || null;
   }
   if (post.sourceType === "twitter" && post.metadata?.provinceTag) {
     return post.metadata.provinceTag;
+  }
+  if (post.sourceType === "twitter" && post.metadata?.authorLocation) {
+    const loc = post.metadata.authorLocation.toLowerCase();
+    for (const [keyword, province] of Object.entries(PROVINCE_HINTS)) {
+      if (loc.includes(keyword)) return province;
+    }
   }
   const text2 = ((post.title || "") + " " + (post.body || "")).toLowerCase();
   for (const [keyword, province] of Object.entries(PROVINCE_HINTS)) {
@@ -445,6 +477,23 @@ async function storeRawPosts(posts, date2) {
 }
 async function getRawPostsByDate(date2) {
   return db.select().from(rawPost).where(eq2(rawPost.date, date2));
+}
+async function rescanProvinceHints(date2) {
+  const posts = await db.select().from(rawPost).where(eq2(rawPost.date, date2));
+  let updated = 0;
+  for (const post of posts) {
+    const newHint = inferProvinceHint({
+      sourceType: post.sourceType,
+      metadata: post.metadata,
+      body: post.body,
+      title: post.title || void 0
+    });
+    if (newHint !== post.provinceHint) {
+      await db.update(rawPost).set({ provinceHint: newHint }).where(eq2(rawPost.id, post.id));
+      updated++;
+    }
+  }
+  return { updated, total: posts.length };
 }
 async function pruneOldRawPosts(daysToKeep = 30) {
   const cutoff = /* @__PURE__ */ new Date();
@@ -529,29 +578,109 @@ var init_storage = __esm({
     init_db();
     init_schema();
     PROVINCE_HINTS = {
-      // Reddit subreddits
-      joburg: "GP",
-      pretoria: "GP",
-      capetown: "WC",
-      durban: "KZN",
-      // Twitter geo search terms (matched by keyword in text)
-      johannesburg: "GP",
-      jozi: "GP",
-      joburg_tw: "GP",
+      // GP — Gauteng
+      "johannesburg": "GP",
+      "joburg": "GP",
+      "jozi": "GP",
+      "jhb": "GP",
+      "soweto": "GP",
+      "alexandra": "GP",
+      "sandton": "GP",
+      "randburg": "GP",
+      "roodepoort": "GP",
+      "boksburg": "GP",
+      "benoni": "GP",
+      "germiston": "GP",
+      "pretoria": "GP",
+      "tshwane": "GP",
+      "centurion": "GP",
+      "midrand": "GP",
+      "hatfield": "GP",
+      "sunnyside": "GP",
+      "mabopane": "GP",
+      "mamelodi": "GP",
+      "steyn city": "GP",
+      // WC — Western Cape
       "cape town": "WC",
-      kaapstad: "WC",
-      ethekwini: "KZN",
-      tshwane: "GP",
-      soweto: "GP",
-      alexandra: "GP",
-      sandton: "GP",
-      gqeberha: "EC",
+      "kaapstad": "WC",
+      "capetown": "WC",
+      "stellenbosch": "WC",
+      "paarl": "WC",
+      "franschhoek": "WC",
+      "george": "WC",
+      "knysna": "WC",
+      "worcester": "WC",
+      "hermanus": "WC",
+      "bellville": "WC",
+      "durbanville": "WC",
+      "mitchells plain": "WC",
+      "khayelitsha": "WC",
+      "table mountain": "WC",
+      "cape flats": "WC",
+      "sea point": "WC",
+      "camps bay": "WC",
+      // KZN — KwaZulu-Natal
+      "durban": "KZN",
+      "ethekwini": "KZN",
+      "pietermaritzburg": "KZN",
+      "pmb": "KZN",
+      "umhlanga": "KZN",
+      "ballito": "KZN",
+      "richards bay": "KZN",
+      "newcastle": "KZN",
+      "ladysmith": "KZN",
+      "margate": "KZN",
+      "tongaat": "KZN",
+      "pinetown": "KZN",
+      "umlazi": "KZN",
+      "king shaka": "KZN",
+      // EC — Eastern Cape
+      "gqeberha": "EC",
       "port elizabeth": "EC",
-      bloemfontein: "FS",
-      mangaung: "FS",
-      polokwane: "LP",
-      nelspruit: "MP",
-      mbombela: "MP"
+      "east london": "EC",
+      "mthatha": "EC",
+      "grahamstown": "EC",
+      "makhanda": "EC",
+      "butterworth": "EC",
+      "king william's town": "EC",
+      "bisho": "EC",
+      "queenstown": "EC",
+      // FS — Free State
+      "bloemfontein": "FS",
+      "mangaung": "FS",
+      "welkom": "FS",
+      "bethlehem": "FS",
+      "kroonstad": "FS",
+      // NW — North West
+      "rustenburg": "NW",
+      "mahikeng": "NW",
+      "mafikeng": "NW",
+      "klerksdorp": "NW",
+      "potchefstroom": "NW",
+      "brits": "NW",
+      "hartbeespoort": "NW",
+      // NC — Northern Cape
+      "kimberley": "NC",
+      "upington": "NC",
+      "springbok": "NC",
+      "de aar": "NC",
+      // MP — Mpumalanga
+      "nelspruit": "MP",
+      "mbombela": "MP",
+      "witbank": "MP",
+      "emalahleni": "MP",
+      "secunda": "MP",
+      "middelburg": "MP",
+      "white river": "MP",
+      "hazyview": "MP",
+      // LP — Limpopo
+      "polokwane": "LP",
+      "limpopo": "LP",
+      "tzaneen": "LP",
+      "musina": "LP",
+      "thohoyandou": "LP",
+      "bela-bela": "LP",
+      "mokopane": "LP"
     };
   }
 });
@@ -774,6 +903,7 @@ async function fetchTwitter() {
       return {
         text: item.text,
         author: item.author?.userName || "unknown",
+        authorLocation: item.author?.location || null,
         likes: item.likeCount || 0,
         retweets: item.retweetCount || 0,
         replies: item.replyCount || 0,
@@ -933,15 +1063,16 @@ Only use "national" if there is genuinely NO geographic signal \u2014 the post d
     const engagement = p.engagement ? ` | engagement: ${JSON.stringify(p.engagement)}` : "";
     return `[${i + 1}] (${attribution}) ${p.title ? p.title + ": " : ""}${p.body.slice(0, 300)}${engagement}`;
   }).join("\n\n");
-  const prompt = `You are analysing South African social media and news posts for geographic and emotional content.
+  const customPrompt = await getSystemPrompt("haiku_summarise");
+  const defaultPrompt = `You are analysing South African social media and news posts for geographic and emotional content.
 
-${provinceContext}
+\${provinceContext}
 
 Province codes: GP (Gauteng), WC (Western Cape), KZN (KwaZulu-Natal), EC (Eastern Cape), FS (Free State), NW (North West), NC (Northern Cape), MP (Mpumalanga), LP (Limpopo).
 
 Posts to analyse:
 
-${postsText}
+\${postsText}
 
 For each post, return a JSON object with:
 - "index": the post number (1-based)
@@ -954,6 +1085,8 @@ For each post, return a JSON object with:
 - "voice_text": if voice_worthy, a 1-2 sentence paraphrase that captures the sentiment. Never a direct quote. Include enough context to understand the voice without seeing the original.
 
 Return a JSON array of objects. Return ONLY the JSON array, no markdown.`;
+  const promptTemplate = customPrompt?.prompt || defaultPrompt;
+  const prompt = promptTemplate.replace("${provinceContext}", provinceContext).replace("${postsText}", postsText);
   const response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 4e3,
@@ -1043,6 +1176,7 @@ var client, BATCH_SIZE;
 var init_summarise = __esm({
   "server/sources/summarise.ts"() {
     "use strict";
+    init_storage();
     client = new Anthropic();
     BATCH_SIZE = 30;
   }
@@ -1105,13 +1239,14 @@ ${natVoices || "  (none)"}`);
 }
 async function synthesiseWorld(summaries, totalRawPosts, retryCount = 0) {
   const provinceSummaryText = buildProvinceSummaries(summaries);
-  const prompt = `You are the synthesis engine for Zerogeist \u2014 a platform that reads South Africa's emotional weather daily.
+  const customPrompt = await getSystemPrompt("sonnet_synthesise");
+  const defaultPrompt = `You are the synthesis engine for Zerogeist \u2014 a platform that reads South Africa's emotional weather daily.
 
-You have pre-analysed summaries of ${totalRawPosts} South African posts from Reddit, Twitter/X, ReliefWeb, and PMG. The posts have already been geo-attributed, emotionally scored, and voices extracted by a prior analysis stage. Your job is creative synthesis \u2014 weave the data into weather.
+You have pre-analysed summaries of \${totalRawPosts} South African posts from Reddit, Twitter/X, ReliefWeb, and PMG. The posts have already been geo-attributed, emotionally scored, and voices extracted by a prior analysis stage. Your job is creative synthesis \u2014 weave the data into weather.
 
 ## Pre-Analysed Province Data
 
-${provinceSummaryText}
+\${provinceSummaryText}
 
 ## Output Requirements
 
@@ -1149,6 +1284,8 @@ Include ALL 9 provinces. Rules:
 - National/unattributed voices can be distributed to provinces where they thematically fit.
 
 Return ONLY the JSON object, no markdown.`;
+  const promptTemplate = customPrompt?.prompt || defaultPrompt;
+  const prompt = promptTemplate.replace("${totalRawPosts}", String(totalRawPosts)).replace("${provinceSummaryText}", provinceSummaryText);
   try {
     const response = await client2.messages.create({
       model: "claude-sonnet-4-20250514",
@@ -1190,6 +1327,7 @@ var client2, PROVINCES;
 var init_synthesise = __esm({
   "server/sources/synthesise.ts"() {
     "use strict";
+    init_storage();
     client2 = new Anthropic2();
     PROVINCES = [
       { id: "GP", name: "Gauteng" },
@@ -1372,7 +1510,7 @@ async function runDailyCycle() {
           url: p.url,
           publishedAt: p.createdAt,
           engagement: { likes: p.likes, retweets: p.retweets, replies: p.replies },
-          metadata: { provinceTag: p.provinceTag }
+          metadata: { provinceTag: p.provinceTag, authorLocation: p.authorLocation }
         });
       }
       for (const p of reliefwebResult.posts) {
@@ -1993,6 +2131,52 @@ router.get("/api/posts/today", isAuthenticated, async (req, res) => {
   } catch (err) {
     console.error("Error fetching posts:", err);
     res.status(500).json({ error: "Failed to fetch posts" });
+  }
+});
+router.post("/api/admin/rescan-hints", isAdmin, async (req, res) => {
+  try {
+    const user = req.user;
+    const latestSnapshot = await getLatestSnapshot();
+    const date2 = latestSnapshot?.date || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const result = await rescanProvinceHints(date2);
+    audit({
+      action: "admin.rescan.hints",
+      userId: user.id,
+      detail: `${result.updated}/${result.total} updated`
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to rescan hints" });
+  }
+});
+router.get("/api/admin/prompts", isAdmin, async (_req, res) => {
+  try {
+    const prompts = await getAllSystemPrompts();
+    res.json(prompts);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch prompts" });
+  }
+});
+router.put("/api/admin/prompts/:id", isAdmin, async (req, res) => {
+  try {
+    const { name, description, prompt } = req.body;
+    if (!prompt) return res.status(400).json({ error: "prompt is required" });
+    const user = req.user;
+    const result = await upsertSystemPrompt(req.params.id, {
+      name: name || req.params.id,
+      description,
+      prompt,
+      updatedBy: user.id
+    });
+    audit({
+      action: "admin.prompt.updated",
+      userId: user.id,
+      resourceType: "system_prompt",
+      resourceId: req.params.id
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update prompt" });
   }
 });
 router.get("/api/admin/cycle/progress", isAdmin, async (_req, res) => {

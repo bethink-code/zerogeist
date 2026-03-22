@@ -248,6 +248,16 @@ export const postSummary = pgTable("post_summary", {
   batchId: text("batch_id"),
 });
 
+// System prompts — editable by admin
+export const systemPrompt = pgTable("system_prompt", {
+  id: text("id").primaryKey(), // "haiku_summarise" | "sonnet_synthesise"
+  name: text("name").notNull(),
+  description: text("description"),
+  prompt: text("prompt").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  updatedBy: text("updated_by").references(() => person.id),
+});
+
 // Sessions table for connect-pg-simple
 export const sessions = pgTable("session", {
   sid: text("sid").primaryKey(),

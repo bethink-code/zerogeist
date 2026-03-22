@@ -427,6 +427,62 @@ router.get("/api/posts/today", isAuthenticated, async (req, res) => {
   }
 });
 
+// POST /api/admin/rescan-hints — re-run inferProvinceHint on existing raw posts
+router.post("/api/admin/rescan-hints", isAdmin, async (req, res) => {
+  try {
+    const user = req.user as any;
+    const latestSnapshot = await storage.getLatestSnapshot();
+    const date = latestSnapshot?.date || new Date().toISOString().split("T")[0];
+    const result = await storage.rescanProvinceHints(date);
+
+    audit({
+      action: "admin.rescan.hints",
+      userId: user.id,
+      detail: `${result.updated}/${result.total} updated`,
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to rescan hints" });
+  }
+});
+
+// GET /api/admin/prompts
+router.get("/api/admin/prompts", isAdmin, async (_req, res) => {
+  try {
+    const prompts = await storage.getAllSystemPrompts();
+    res.json(prompts);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch prompts" });
+  }
+});
+
+// PUT /api/admin/prompts/:id
+router.put("/api/admin/prompts/:id", isAdmin, async (req, res) => {
+  try {
+    const { name, description, prompt } = req.body;
+    if (!prompt) return res.status(400).json({ error: "prompt is required" });
+    const user = req.user as any;
+    const result = await storage.upsertSystemPrompt(req.params.id, {
+      name: name || req.params.id,
+      description,
+      prompt,
+      updatedBy: user.id,
+    });
+
+    audit({
+      action: "admin.prompt.updated",
+      userId: user.id,
+      resourceType: "system_prompt",
+      resourceId: req.params.id,
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update prompt" });
+  }
+});
+
 // GET /api/admin/cycle/progress
 router.get("/api/admin/cycle/progress", isAdmin, async (_req, res) => {
   try {

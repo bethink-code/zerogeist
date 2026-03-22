@@ -222,7 +222,7 @@ export async function runDailyCycle(): Promise<void> {
         url: p.url,
         publishedAt: p.createdAt,
         engagement: { likes: p.likes, retweets: p.retweets, replies: p.replies },
-        metadata: { provinceTag: p.provinceTag },
+        metadata: { provinceTag: p.provinceTag, authorLocation: p.authorLocation },
       });
     }
 

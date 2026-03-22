@@ -12,6 +12,7 @@ import {
   dailyCycleLog,
   rawPost,
   postSummary,
+  systemPrompt,
 } from "../shared/schema.js";
 import { eq, desc, and, lt } from "drizzle-orm";
 
@@ -279,24 +280,83 @@ export async function getAllActivePersons() {
   return db.select().from(person);
 }
 
+// ─── System Prompts ─────────────────────────────────────
+export async function getSystemPrompt(id: string) {
+  const [row] = await db.select().from(systemPrompt).where(eq(systemPrompt.id, id));
+  return row || null;
+}
+
+export async function getAllSystemPrompts() {
+  return db.select().from(systemPrompt).orderBy(systemPrompt.id);
+}
+
+export async function upsertSystemPrompt(
+  id: string,
+  data: { name: string; description?: string; prompt: string; updatedBy?: string }
+) {
+  const existing = await getSystemPrompt(id);
+  if (existing) {
+    const [row] = await db
+      .update(systemPrompt)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(systemPrompt.id, id))
+      .returning();
+    return row;
+  }
+  const [row] = await db
+    .insert(systemPrompt)
+    .values({ id, ...data })
+    .returning();
+  return row;
+}
+
 // ─── Raw Posts ──────────────────────────────────────────
 
-// Province hint mapping from known source identifiers
+// Province hint mapping — comprehensive SA geo keywords
 const PROVINCE_HINTS: Record<string, string> = {
-  // Reddit subreddits
-  joburg: "GP",
-  pretoria: "GP",
-  capetown: "WC",
-  durban: "KZN",
-  // Twitter geo search terms (matched by keyword in text)
-  johannesburg: "GP", jozi: "GP", joburg_tw: "GP",
-  "cape town": "WC", kaapstad: "WC",
-  ethekwini: "KZN",
-  tshwane: "GP",
-  soweto: "GP", alexandra: "GP", sandton: "GP",
-  gqeberha: "EC", "port elizabeth": "EC",
-  bloemfontein: "FS", mangaung: "FS",
-  polokwane: "LP", nelspruit: "MP", mbombela: "MP",
+  // GP — Gauteng
+  "johannesburg": "GP", "joburg": "GP", "jozi": "GP", "jhb": "GP",
+  "soweto": "GP", "alexandra": "GP", "sandton": "GP", "randburg": "GP",
+  "roodepoort": "GP", "boksburg": "GP", "benoni": "GP", "germiston": "GP",
+  "pretoria": "GP", "tshwane": "GP", "centurion": "GP", "midrand": "GP",
+  "hatfield": "GP", "sunnyside": "GP", "mabopane": "GP", "mamelodi": "GP",
+  "steyn city": "GP",
+  // WC — Western Cape
+  "cape town": "WC", "kaapstad": "WC", "capetown": "WC",
+  "stellenbosch": "WC", "paarl": "WC", "franschhoek": "WC",
+  "george": "WC", "knysna": "WC", "worcester": "WC", "hermanus": "WC",
+  "bellville": "WC", "durbanville": "WC", "mitchells plain": "WC",
+  "khayelitsha": "WC", "table mountain": "WC", "cape flats": "WC",
+  "sea point": "WC", "camps bay": "WC",
+  // KZN — KwaZulu-Natal
+  "durban": "KZN", "ethekwini": "KZN",
+  "pietermaritzburg": "KZN", "pmb": "KZN", "umhlanga": "KZN",
+  "ballito": "KZN", "richards bay": "KZN", "newcastle": "KZN",
+  "ladysmith": "KZN", "margate": "KZN", "tongaat": "KZN",
+  "pinetown": "KZN", "umlazi": "KZN", "king shaka": "KZN",
+  // EC — Eastern Cape
+  "gqeberha": "EC", "port elizabeth": "EC",
+  "east london": "EC", "mthatha": "EC", "grahamstown": "EC",
+  "makhanda": "EC", "butterworth": "EC", "king william's town": "EC",
+  "bisho": "EC", "queenstown": "EC",
+  // FS — Free State
+  "bloemfontein": "FS", "mangaung": "FS", "welkom": "FS",
+  "bethlehem": "FS", "kroonstad": "FS",
+  // NW — North West
+  "rustenburg": "NW", "mahikeng": "NW", "mafikeng": "NW",
+  "klerksdorp": "NW", "potchefstroom": "NW", "brits": "NW",
+  "hartbeespoort": "NW",
+  // NC — Northern Cape
+  "kimberley": "NC", "upington": "NC", "springbok": "NC",
+  "de aar": "NC",
+  // MP — Mpumalanga
+  "nelspruit": "MP", "mbombela": "MP", "witbank": "MP",
+  "emalahleni": "MP", "secunda": "MP",
+  "middelburg": "MP", "white river": "MP", "hazyview": "MP",
+  // LP — Limpopo
+  "polokwane": "LP", "limpopo": "LP", "tzaneen": "LP",
+  "musina": "LP", "thohoyandou": "LP", "bela-bela": "LP",
+  "mokopane": "LP",
 };
 
 function inferProvinceHint(post: {
@@ -313,6 +373,14 @@ function inferProvinceHint(post: {
   // Twitter: use provinceTag from search term (most reliable)
   if (post.sourceType === "twitter" && post.metadata?.provinceTag) {
     return post.metadata.provinceTag;
+  }
+
+  // Twitter: check author.location from profile
+  if (post.sourceType === "twitter" && post.metadata?.authorLocation) {
+    const loc = post.metadata.authorLocation.toLowerCase();
+    for (const [keyword, province] of Object.entries(PROVINCE_HINTS)) {
+      if (loc.includes(keyword)) return province;
+    }
   }
 
   // Fallback: scan text for geo keywords
@@ -367,6 +435,28 @@ export async function storeRawPosts(
 
 export async function getRawPostsByDate(date: string) {
   return db.select().from(rawPost).where(eq(rawPost.date, date));
+}
+
+// Re-scan all raw posts for a date and update province_hint
+export async function rescanProvinceHints(date: string): Promise<{ updated: number; total: number }> {
+  const posts = await db.select().from(rawPost).where(eq(rawPost.date, date));
+  let updated = 0;
+
+  for (const post of posts) {
+    const newHint = inferProvinceHint({
+      sourceType: post.sourceType,
+      metadata: post.metadata,
+      body: post.body,
+      title: post.title || undefined,
+    });
+
+    if (newHint !== post.provinceHint) {
+      await db.update(rawPost).set({ provinceHint: newHint }).where(eq(rawPost.id, post.id));
+      updated++;
+    }
+  }
+
+  return { updated, total: posts.length };
 }
 
 export async function pruneOldRawPosts(daysToKeep: number = 30) {
