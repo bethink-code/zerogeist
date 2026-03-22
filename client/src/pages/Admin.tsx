@@ -3,10 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
 import { Link } from "wouter";
 
-type Tab = "persons" | "sources" | "health" | "prompts";
+type Tab = "health" | "prompts" | "sources" | "persons";
 
 export default function Admin() {
-  const [tab, setTab] = useState<Tab>("persons");
+  const [tab, setTab] = useState<Tab>("health");
 
   return (
     <div className="admin-theme min-h-screen">
@@ -22,7 +22,7 @@ export default function Admin() {
       <div className="max-w-5xl mx-auto px-6 py-8">
         {/* Tabs */}
         <div className="flex gap-6 border-b border-[var(--surface-border)] mb-8">
-          {(["persons", "sources", "health", "prompts"] as Tab[]).map((t) => (
+          {(["health", "prompts", "sources", "persons"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -32,7 +32,7 @@ export default function Admin() {
                   : "text-[var(--text-placeholder)] hover:text-[var(--text-secondary)]"
               }`}
             >
-              {t === "persons" ? "Invited Persons" : t === "sources" ? "Source Registry" : t === "health" ? "Platform Health" : "AI Prompts"}
+              {t === "health" ? "Platform Health" : t === "prompts" ? "AI Prompts" : t === "sources" ? "Sources" : "Invites"}
             </button>
           ))}
         </div>
