@@ -108,7 +108,7 @@ function PersonsTab() {
         <button
           type="submit"
           disabled={addMutation.isPending}
-          className="px-4 py-2 bg-[var(--fire-600)] text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+          className="btn-primary text-sm"
         >
           Invite
         </button>
@@ -193,9 +193,9 @@ function SourcesTab() {
       <div className="flex justify-end">
         <button
           onClick={() => setShowAdd(!showAdd)}
-          className="px-4 py-2 bg-[var(--fire-600)] text-white rounded-lg text-sm font-medium hover:opacity-90"
+          className={showAdd ? "btn-ghost text-sm" : "btn-primary text-sm"}
         >
-          {showAdd ? "Cancel" : "Add Source"}
+          {showAdd ? "Cancel" : "+ Add source"}
         </button>
       </div>
 
@@ -324,9 +324,9 @@ function AddSourceForm({ onDone }: { onDone: () => void }) {
         <button
           type="submit"
           disabled={mutation.isPending}
-          className="px-4 py-2 bg-[var(--fire-600)] text-white rounded-lg text-sm font-medium"
+          className="btn-primary text-sm"
         >
-          Add Source
+          Add source
         </button>
       </div>
     </form>
@@ -380,13 +380,13 @@ function HealthTab() {
   return (
     <div className="space-y-8">
       {/* Controls + Progress — always at top */}
-      <div className="flex gap-3 flex-wrap">
+      <div className="flex gap-3 flex-wrap items-center">
         <button
           onClick={() => triggerMutation.mutate()}
           disabled={triggerMutation.isPending || polling}
-          className="px-4 py-2 bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg text-sm text-[var(--text-muted)] hover:text-[var(--text-heading)] hover:border-[var(--fire-600)] transition-colors"
+          className="btn-primary text-sm"
         >
-          {triggerMutation.isPending ? "Triggering..." : "Trigger Daily Cycle"}
+          {triggerMutation.isPending ? "Triggering..." : "Trigger daily cycle"}
         </button>
 
         {data?.todaysCycle && (
@@ -394,7 +394,7 @@ function HealthTab() {
             <button
               onClick={() => resetMutation.mutate("synthesise")}
               disabled={resetMutation.isPending || polling}
-              className="px-4 py-2 bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg text-xs text-[var(--text-muted)] hover:text-amber-400 hover:border-amber-400/50 transition-colors"
+              className="btn-secondary text-sm"
               title="Keep raw posts + summaries, re-synthesise only"
             >
               Re-synthesise
@@ -402,7 +402,7 @@ function HealthTab() {
             <button
               onClick={() => resetMutation.mutate("summarise")}
               disabled={resetMutation.isPending || polling}
-              className="px-4 py-2 bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg text-xs text-[var(--text-muted)] hover:text-orange-400 hover:border-orange-400/50 transition-colors"
+              className="btn-secondary text-sm"
               title="Keep raw posts, re-summarise + re-synthesise"
             >
               Re-summarise
@@ -410,10 +410,10 @@ function HealthTab() {
             <button
               onClick={() => resetMutation.mutate("all")}
               disabled={resetMutation.isPending || polling}
-              className="px-4 py-2 bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg text-xs text-red-400/70 hover:text-red-400 hover:border-red-400/50 transition-colors"
+              className="btn-destructive text-sm ml-auto"
               title="Delete everything including raw posts, re-fetch all"
             >
-              Full Reset
+              Full reset
             </button>
           </>
         )}
@@ -423,16 +423,16 @@ function HealthTab() {
         <div className="bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Cycle Progress</p>
-            <p className="text-xs text-amber-400 animate-pulse">{progress.detail}</p>
+            <p className="text-xs text-[var(--canola-400)] animate-pulse">{progress.detail}</p>
           </div>
           <div className="space-y-1.5">
             {(progress.steps || []).map((step: any) => (
               <div key={step.name} className="flex items-center gap-3">
                 <span className="w-4 text-center">
-                  {step.status === "done" && <span className="text-green-400">✓</span>}
-                  {step.status === "running" && <span className="text-amber-400 animate-pulse">●</span>}
-                  {step.status === "failed" && <span className="text-red-400">✗</span>}
-                  {step.status === "pending" && <span className="text-[var(--text-muted)]">○</span>}
+                  {step.status === "done" && <span className="text-[var(--succulent-600)]">✓</span>}
+                  {step.status === "running" && <span className="text-[var(--canola-400)] animate-pulse">●</span>}
+                  {step.status === "failed" && <span className="text-[var(--fire-600)]">✗</span>}
+                  {step.status === "pending" && <span className="text-[var(--text-placeholder)]">○</span>}
                 </span>
                 <span className={`text-xs flex-1 ${step.status === "running" ? "text-[var(--text-heading)]" : "text-[var(--text-muted)]"}`}>
                   {step.name}
@@ -450,7 +450,7 @@ function HealthTab() {
       )}
 
       {polling && !progress && (
-        <p className="text-xs text-amber-400 animate-pulse">
+        <p className="text-xs text-[var(--canola-400)] animate-pulse">
           Starting cycle...
         </p>
       )}
@@ -475,7 +475,7 @@ function HealthTab() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
               <span className="text-[var(--text-muted)]">Status: </span>
-              <span className={data.todaysCycle.status === "completed" ? "text-green-400" : data.todaysCycle.status === "failed" ? "text-red-400" : "text-amber-400"}>
+              <span className={data.todaysCycle.status === "completed" ? "text-[var(--succulent-600)]" : data.todaysCycle.status === "failed" ? "text-[var(--fire-600)]" : "text-[var(--canola-400)]"}>
                 {data.todaysCycle.status}
               </span>
             </div>
@@ -493,7 +493,7 @@ function HealthTab() {
             </div>
           </div>
           {data.todaysCycle.failedAtStep && (
-            <p className="text-xs text-red-400">Failed at: {data.todaysCycle.failedAtStep}</p>
+            <p className="text-xs text-[var(--fire-800)]">Failed at: {data.todaysCycle.failedAtStep}</p>
           )}
         </div>
       )}
@@ -582,7 +582,7 @@ function PromptsTab() {
                     <button
                       onClick={() => saveMutation.mutate({ id, prompt: editValue })}
                       disabled={saveMutation.isPending}
-                      className="text-xs px-3 py-1 bg-[var(--fire-600)] text-white rounded font-medium"
+                      className="btn-primary text-xs"
                     >
                       {saveMutation.isPending ? "Saving..." : "Save"}
                     </button>

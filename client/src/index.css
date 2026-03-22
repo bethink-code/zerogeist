@@ -36,7 +36,6 @@ body {
 /* =============================================================================
    ADMIN — Parchment light theme (Aloe ferox · Zed-inspired)
    Applied via .admin-theme class on the admin wrapper.
-   Full token system from zerogeist-tokens.js.
    ============================================================================= */
 .admin-theme {
   /* Surfaces */
@@ -56,59 +55,124 @@ body {
   --text-placeholder:   #B0A090;
 
   /* Fire ramp */
-  --fire-50:            #FDF0E8;
-  --fire-100:           #F9CEAF;
-  --fire-200:           #F0A06A;
-  --fire-400:           #E07030;
-  --fire-600:           #C85A1A;
-  --fire-800:           #963D0E;
-  --fire-900:           #5C2206;
+  --fire-50:  #FDF0E8;  --fire-100: #F9CEAF;  --fire-200: #F0A06A;
+  --fire-400: #E07030;  --fire-600: #C85A1A;  --fire-800: #963D0E;
+  --fire-900: #5C2206;
 
   /* Succulent ramp */
-  --succulent-50:       #EEF4EA;
-  --succulent-100:      #C4DDB6;
-  --succulent-200:      #9AC488;
-  --succulent-400:      #5C7A50;
-  --succulent-600:      #7A9E68;
-  --succulent-800:      #3D5C2E;
-  --succulent-900:      #1E3014;
+  --succulent-50:  #EEF4EA;  --succulent-100: #C4DDB6;  --succulent-200: #9AC488;
+  --succulent-400: #5C7A50;  --succulent-600: #7A9E68;  --succulent-800: #3D5C2E;
 
   /* Canola ramp */
-  --canola-50:          #FDF6E0;
-  --canola-400:         #D4A827;
-  --canola-800:         #6E5208;
+  --canola-50: #FDF6E0;  --canola-400: #D4A827;  --canola-800: #6E5208;
 
   /* Sky ramp */
-  --sky-50:             #E8F0F8;
-  --sky-400:            #3E7BBF;
-  --sky-600:            #1F5C99;
+  --sky-50: #E8F0F8;  --sky-400: #3E7BBF;  --sky-600: #1F5C99;
 
   /* Dusk ramp */
-  --dusk-50:            #F0EDF5;
-  --dusk-400:           #6A5278;
-  --dusk-800:           #2E1E3C;
+  --dusk-50: #F0EDF5;  --dusk-400: #6A5278;  --dusk-800: #2E1E3C;
 
   /* Dust ramp */
-  --dust-400:           #A89880;
-  --dust-600:           #8A7860;
+  --dust-400: #A89880;  --dust-600: #8A7860;
 
   /* Emotion pill pairs — bg + text, NO borders */
-  --emotion-anger-bg:   #FDF0E8;   --emotion-anger-text: #963D0E;
-  --emotion-hope-bg:    #EEF4EA;   --emotion-hope-text:  #3D5C2E;
-  --emotion-fear-bg:    #E8F0F8;   --emotion-fear-text:  #1F5C99;
-  --emotion-joy-bg:     #FDF6E0;   --emotion-joy-text:   #6E5208;
-  --emotion-grief-bg:   #F0EDF5;   --emotion-grief-text: #4A3558;
+  --emotion-anger-bg: #FDF0E8;  --emotion-anger-text: #963D0E;
+  --emotion-hope-bg:  #EEF4EA;  --emotion-hope-text:  #3D5C2E;
+  --emotion-fear-bg:  #E8F0F8;  --emotion-fear-text:  #1F5C99;
+  --emotion-joy-bg:   #FDF6E0;  --emotion-joy-text:   #6E5208;
+  --emotion-grief-bg: #F0EDF5;  --emotion-grief-text: #4A3558;
 
-  /* Source type dots — encodes signal origin, not status */
-  --source-reddit:      #C85A1A;   /* fire-600 — public voice */
-  --source-pmg:         #3E7BBF;   /* sky-400  — institutional */
-  --source-reliefweb:   #7A9E68;   /* succulent-600 — humanitarian */
-  --source-twitter:     #8A7860;   /* dust-600 — social */
+  /* Source type dots */
+  --source-reddit:    #C85A1A;
+  --source-pmg:       #3E7BBF;
+  --source-reliefweb: #7A9E68;
+  --source-twitter:   #8A7860;
 
-  /* Pill rules: filled bg + dark text. NEVER add border to pills. */
-  --pill-type-bg:       #E8E0CC;   /* surface-hover */
-  --pill-type-text:     #5C5040;   /* text-secondary */
+  /* Pill tokens */
+  --pill-type-bg:   #E8E0CC;
+  --pill-type-text: #5C5040;
+
+  /* Button hierarchy tokens */
+  --btn-primary-bg:       #C85A1A;
+  --btn-primary-text:     #FDF0E8;
+  --btn-secondary-text:   #C85A1A;
+  --btn-secondary-border: #C85A1A;
+  --btn-surface-bg:       #FFFFFF;
+  --btn-surface-text:     #3A3020;
+  --btn-surface-border:   #DDD5C0;
+  --btn-ghost-text:       #5C5040;
+  --btn-destructive-text: #963D0E;
+
+  /* Radius */
+  --radius-sm: 4px;  --radius-md: 6px;  --radius-lg: 8px;
+  --radius-xl: 12px; --radius-pill: 999px;
 
   background-color: var(--surface-page);
   color: var(--text-body);
 }
+
+/* =============================================================================
+   BUTTON CLASSES — five levels, one job each
+   Cards: 0.5px border. Buttons: defined below. Never share visual weight.
+   ============================================================================= */
+.admin-theme .btn-primary {
+  background-color: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.admin-theme .btn-primary:hover { opacity: 0.9; }
+.admin-theme .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.admin-theme .btn-secondary {
+  background-color: transparent;
+  color: var(--btn-secondary-text);
+  font-weight: 500;
+  padding: 7px 17px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--btn-secondary-border);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.admin-theme .btn-secondary:hover { background-color: var(--fire-50); }
+.admin-theme .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.admin-theme .btn-surface {
+  background-color: var(--btn-surface-bg);
+  color: var(--btn-surface-text);
+  font-weight: 500;
+  padding: 7px 17px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--btn-surface-border);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.admin-theme .btn-surface:hover { background-color: var(--surface-hover); }
+
+.admin-theme .btn-ghost {
+  background-color: transparent;
+  color: var(--btn-ghost-text);
+  font-weight: 500;
+  padding: 7px 14px;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.admin-theme .btn-ghost:hover { color: var(--text-heading); }
+
+.admin-theme .btn-destructive {
+  background-color: transparent;
+  color: var(--btn-destructive-text);
+  font-weight: 500;
+  padding: 7px 14px;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.admin-theme .btn-destructive:hover { opacity: 0.7; }
