@@ -29,7 +29,7 @@ export default function Admin() {
               className={`pb-3 text-sm capitalize transition-colors ${
                 tab === t
                   ? "text-[var(--fire-600)] border-b-2 border-[var(--fire-600)]"
-                  : "text-[var(--text-muted)] hover:text-[var(--text-heading)]"
+                  : "text-[var(--text-placeholder)] hover:text-[var(--text-secondary)]"
               }`}
             >
               {t === "persons" ? "Invited Persons" : t === "sources" ? "Source Registry" : t === "health" ? "Platform Health" : "AI Prompts"}
@@ -96,14 +96,14 @@ function PersonsTab() {
           placeholder="Email address"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="flex-1 bg-[var(--surface-card)] border border-[var(--surface-border)] rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[var(--fire-600)]"
+          className="flex-1 bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[var(--fire-600)]"
         />
         <input
           type="text"
           placeholder="Note (optional)"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          className="flex-1 bg-[var(--surface-card)] border border-[var(--surface-border)] rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[var(--fire-600)]"
+          className="flex-1 bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[var(--fire-600)]"
         />
         <button
           type="submit"
@@ -122,7 +122,7 @@ function PersonsTab() {
           {persons.map((p: any) => (
             <div
               key={p.id}
-              className="bg-[var(--surface-card)] border border-[var(--surface-border)] rounded-lg p-4 flex items-center justify-between"
+              className="bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg p-4 flex items-center justify-between"
             >
               <div>
                 <p className="text-sm font-medium">{p.email}</p>
@@ -142,8 +142,8 @@ function PersonsTab() {
                 }
                 className={`text-xs px-3 py-1 rounded-full transition-colors ${
                   p.active
-                    ? "bg-green-900/30 text-green-400 hover:bg-red-900/30 hover:text-red-400"
-                    : "bg-red-900/30 text-red-400 hover:bg-green-900/30 hover:text-green-400"
+                    ? "bg-[var(--succulent-50)] text-[var(--succulent-800)] hover:bg-[var(--fire-50)] hover:text-[var(--fire-800)]"
+                    : "bg-[var(--fire-50)] text-[var(--fire-800)] hover:bg-[var(--succulent-50)] hover:text-[var(--succulent-800)]"
                 }`}
               >
                 {p.active ? "Active" : "Revoked"}
@@ -177,12 +177,13 @@ function SourcesTab() {
     },
   });
 
+  // Status dot reflects run outcome, not source type
   const statusColor = (status: string | null) => {
     switch (status) {
-      case "success": return "bg-green-500";
-      case "rate_limited": return "bg-amber-500";
-      case "failed": return "bg-red-500";
-      default: return "bg-gray-600";
+      case "success": return "bg-[var(--succulent-600)]";
+      case "rate_limited": return "bg-[var(--canola-400)]";
+      case "failed": return "bg-[var(--fire-600)]";
+      default: return "bg-[var(--dust-400)]"; // never run
     }
   };
 
@@ -206,14 +207,14 @@ function SourcesTab() {
           {sources.map((s: any) => (
             <div
               key={s.id}
-              className="bg-[var(--surface-card)] border border-[var(--surface-border)] rounded-lg p-4"
+              className="bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg p-4"
             >
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
                   <div className="flex items-center gap-3">
                     <div className={`w-2 h-2 rounded-full ${statusColor(s.lastRunStatus)}`} />
                     <p className="text-sm font-medium">{s.name}</p>
-                    <span className="text-xs text-[var(--text-muted)] bg-[var(--surface-input)] px-2 py-0.5 rounded">
+                    <span className="text-xs text-[var(--text-secondary)] bg-[var(--surface-hover)] px-2 py-0.5 rounded">
                       {s.type}
                     </span>
                   </div>
@@ -223,8 +224,8 @@ function SourcesTab() {
                   onClick={() => toggleMutation.mutate({ id: s.id, active: !s.active })}
                   className={`text-xs px-3 py-1 rounded-full ${
                     s.active
-                      ? "bg-green-900/30 text-green-400"
-                      : "bg-red-900/30 text-red-400"
+                      ? "bg-[var(--succulent-50)] text-[var(--succulent-800)]"
+                      : "bg-[var(--fire-50)] text-[var(--fire-800)]"
                   }`}
                 >
                   {s.active ? "Active" : "Inactive"}
@@ -278,19 +279,19 @@ function AddSourceForm({ onDone }: { onDone: () => void }) {
         e.preventDefault();
         mutation.mutate();
       }}
-      className="bg-[var(--surface-card)] border border-[var(--surface-border)] rounded-lg p-6 space-y-4"
+      className="bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg p-6 space-y-4"
     >
       <div className="grid grid-cols-2 gap-4">
         <input
           placeholder="Name"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
-          className="bg-[var(--surface-input)] border border-[var(--surface-border)] rounded px-3 py-2 text-sm text-[var(--text-heading)]"
+          className="bg-[var(--surface-input)] border-[0.5px] border-[var(--surface-border)] rounded px-3 py-2 text-sm text-[var(--text-heading)]"
         />
         <select
           value={form.type}
           onChange={(e) => setForm({ ...form, type: e.target.value })}
-          className="bg-[var(--surface-input)] border border-[var(--surface-border)] rounded px-3 py-2 text-sm text-[var(--text-heading)]"
+          className="bg-[var(--surface-input)] border-[0.5px] border-[var(--surface-border)] rounded px-3 py-2 text-sm text-[var(--text-heading)]"
         >
           {["reddit", "reliefweb", "pmg", "telegram", "rss", "twitter", "other"].map((t) => (
             <option key={t} value={t}>{t}</option>
@@ -300,12 +301,12 @@ function AddSourceForm({ onDone }: { onDone: () => void }) {
           placeholder="Identifier (subreddit, URL, etc.)"
           value={form.identifier}
           onChange={(e) => setForm({ ...form, identifier: e.target.value })}
-          className="col-span-2 bg-[var(--surface-input)] border border-[var(--surface-border)] rounded px-3 py-2 text-sm text-[var(--text-heading)]"
+          className="col-span-2 bg-[var(--surface-input)] border-[0.5px] border-[var(--surface-border)] rounded px-3 py-2 text-sm text-[var(--text-heading)]"
         />
         <select
           value={form.region}
           onChange={(e) => setForm({ ...form, region: e.target.value })}
-          className="bg-[var(--surface-input)] border border-[var(--surface-border)] rounded px-3 py-2 text-sm text-[var(--text-heading)]"
+          className="bg-[var(--surface-input)] border-[0.5px] border-[var(--surface-border)] rounded px-3 py-2 text-sm text-[var(--text-heading)]"
         >
           {["national", "provincial", "local"].map((r) => (
             <option key={r} value={r}>{r}</option>
@@ -315,7 +316,7 @@ function AddSourceForm({ onDone }: { onDone: () => void }) {
           placeholder="Province (if provincial)"
           value={form.province}
           onChange={(e) => setForm({ ...form, province: e.target.value })}
-          className="bg-[var(--surface-input)] border border-[var(--surface-border)] rounded px-3 py-2 text-sm text-[var(--text-heading)]"
+          className="bg-[var(--surface-input)] border-[0.5px] border-[var(--surface-border)] rounded px-3 py-2 text-sm text-[var(--text-heading)]"
         />
       </div>
       <div className="flex gap-3">
@@ -382,7 +383,7 @@ function HealthTab() {
         <button
           onClick={() => triggerMutation.mutate()}
           disabled={triggerMutation.isPending || polling}
-          className="px-4 py-2 bg-[var(--surface-card)] border border-[var(--surface-border)] rounded-lg text-sm text-[var(--text-muted)] hover:text-[var(--text-heading)] hover:border-[var(--fire-600)] transition-colors"
+          className="px-4 py-2 bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg text-sm text-[var(--text-muted)] hover:text-[var(--text-heading)] hover:border-[var(--fire-600)] transition-colors"
         >
           {triggerMutation.isPending ? "Triggering..." : "Trigger Daily Cycle"}
         </button>
@@ -392,7 +393,7 @@ function HealthTab() {
             <button
               onClick={() => resetMutation.mutate("synthesise")}
               disabled={resetMutation.isPending || polling}
-              className="px-4 py-2 bg-[var(--surface-card)] border border-[var(--surface-border)] rounded-lg text-xs text-[var(--text-muted)] hover:text-amber-400 hover:border-amber-400/50 transition-colors"
+              className="px-4 py-2 bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg text-xs text-[var(--text-muted)] hover:text-amber-400 hover:border-amber-400/50 transition-colors"
               title="Keep raw posts + summaries, re-synthesise only"
             >
               Re-synthesise
@@ -400,7 +401,7 @@ function HealthTab() {
             <button
               onClick={() => resetMutation.mutate("summarise")}
               disabled={resetMutation.isPending || polling}
-              className="px-4 py-2 bg-[var(--surface-card)] border border-[var(--surface-border)] rounded-lg text-xs text-[var(--text-muted)] hover:text-orange-400 hover:border-orange-400/50 transition-colors"
+              className="px-4 py-2 bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg text-xs text-[var(--text-muted)] hover:text-orange-400 hover:border-orange-400/50 transition-colors"
               title="Keep raw posts, re-summarise + re-synthesise"
             >
               Re-summarise
@@ -408,7 +409,7 @@ function HealthTab() {
             <button
               onClick={() => resetMutation.mutate("all")}
               disabled={resetMutation.isPending || polling}
-              className="px-4 py-2 bg-[var(--surface-card)] border border-[var(--surface-border)] rounded-lg text-xs text-red-400/70 hover:text-red-400 hover:border-red-400/50 transition-colors"
+              className="px-4 py-2 bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg text-xs text-red-400/70 hover:text-red-400 hover:border-red-400/50 transition-colors"
               title="Delete everything including raw posts, re-fetch all"
             >
               Full Reset
@@ -418,7 +419,7 @@ function HealthTab() {
       </div>
 
       {polling && progress && (
-        <div className="bg-[var(--surface-card)] border border-[var(--surface-border)] rounded-lg p-4 space-y-3">
+        <div className="bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Cycle Progress</p>
             <p className="text-xs text-amber-400 animate-pulse">{progress.detail}</p>
@@ -468,7 +469,7 @@ function HealthTab() {
       </div>
 
       {data?.todaysCycle && (
-        <div className="bg-[var(--surface-card)] border border-[var(--surface-border)] rounded-lg p-4 space-y-2">
+        <div className="bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg p-4 space-y-2">
           <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Today's Cycle Details</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
@@ -558,7 +559,7 @@ function PromptsTab() {
         const currentPrompt = saved?.prompt || "(using default from code — click Edit to customise)";
 
         return (
-          <div key={id} className="bg-[var(--surface-card)] border border-[var(--surface-border)] rounded-lg p-5 space-y-3">
+          <div key={id} className="bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg p-5 space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-medium">{meta.name}</h3>
@@ -571,7 +572,7 @@ function PromptsTab() {
                       setEditing(id);
                       setEditValue(saved?.prompt || "");
                     }}
-                    className="text-xs px-3 py-1 bg-[var(--surface-input)] border border-[var(--surface-border)] rounded hover:border-[var(--fire-600)] transition-colors"
+                    className="text-xs px-3 py-1 bg-[var(--surface-input)] border-[0.5px] border-[var(--surface-border)] rounded hover:border-[var(--fire-600)] transition-colors"
                   >
                     {saved ? "Edit" : "Customise"}
                   </button>
@@ -600,7 +601,7 @@ function PromptsTab() {
                 <textarea
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
-                  className="w-full bg-[var(--surface-input)] border border-[var(--surface-border)] rounded-lg p-4 text-sm text-white font-mono resize-y focus:outline-none focus:border-[var(--fire-600)] transition-colors"
+                  className="w-full bg-[var(--surface-input)] border-[0.5px] border-[var(--surface-border)] rounded-lg p-4 text-sm text-white font-mono resize-y focus:outline-none focus:border-[var(--fire-600)] transition-colors"
                   style={{ minHeight: "300px" }}
                   placeholder="Enter the prompt template. Use ${provinceContext}, ${postsText}, ${provinceSummaryText} etc. as placeholders — they'll be filled in at runtime."
                 />
@@ -630,7 +631,7 @@ function PromptsTab() {
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="bg-[var(--surface-card)] border border-[var(--surface-border)] rounded-lg p-4">
+    <div className="bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg p-4">
       <p className="text-xs text-[var(--text-muted)]">{label}</p>
       <p className="text-xl font-semibold mt-1 text-[var(--text-heading)]">{value}</p>
     </div>
