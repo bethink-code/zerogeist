@@ -2,11 +2,14 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
 import { Link } from "wouter";
+import { useAuth } from "../hooks/useAuth";
+import UserMenu from "../components/UserMenu";
 
 type Tab = "health" | "prompts" | "sources" | "persons";
 
 export default function Admin() {
   const [tab, setTab] = useState<Tab>("health");
+  const { user, isAdmin, logout } = useAuth();
 
   return (
     <div className="admin-theme min-h-screen">
@@ -17,6 +20,7 @@ export default function Admin() {
           </Link>
           <span className="text-xs text-[var(--text-muted)]">/ admin</span>
         </div>
+        <UserMenu user={user} isAdmin={isAdmin} onLogout={logout} variant="light" />
       </header>
 
       <div className="max-w-5xl mx-auto px-6 py-8">

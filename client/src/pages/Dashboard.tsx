@@ -7,6 +7,7 @@ import { useQuery as usePostsQuery } from "@tanstack/react-query";
 import GeistField from "../components/GeistField";
 import ProvinceDrilldown from "../components/ProvinceDrilldown";
 import PostCard from "../components/PostCard";
+import UserMenu from "../components/UserMenu";
 
 type DrilldownState =
   | { type: "map" }
@@ -41,35 +42,7 @@ export default function Dashboard() {
           </h1>
           <span className="text-xs text-[var(--zg-teal)]">mzansi</span>
         </div>
-        <div className="flex items-center gap-4">
-          {isAdmin && (
-            <Link
-              href="/admin"
-              className="text-xs text-[var(--zg-muted)] hover:text-white transition-colors"
-            >
-              Admin
-            </Link>
-          )}
-          <Link
-            href="/settings"
-            className="text-xs text-[var(--zg-muted)] hover:text-white transition-colors"
-          >
-            Settings
-          </Link>
-          <button
-            onClick={() => logout()}
-            className="text-xs text-[var(--zg-muted)] hover:text-white transition-colors"
-          >
-            Sign out
-          </button>
-          {user?.avatar && (
-            <img
-              src={user.avatar}
-              alt=""
-              className="w-7 h-7 rounded-full"
-            />
-          )}
-        </div>
+        <UserMenu user={user} isAdmin={isAdmin} onLogout={logout} variant="dark" />
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-12 space-y-16">
