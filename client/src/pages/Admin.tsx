@@ -13,14 +13,16 @@ export default function Admin() {
 
   return (
     <div className="admin-theme min-h-screen">
-      <header className="border-b border-[var(--surface-border)] bg-[var(--surface-titlebar)] px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/" className="text-sm font-bold tracking-[0.2em] uppercase text-[var(--text-heading)] hover:text-[var(--fire-600)] transition-colors">
-            Zerogeist
-          </Link>
-          <span className="text-xs text-[var(--text-muted)]">/ admin</span>
+      <header className="border-b border-[var(--surface-border)] bg-[var(--surface-titlebar)]">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="text-sm font-bold tracking-[0.2em] uppercase text-[var(--text-heading)] hover:text-[var(--fire-600)] transition-colors">
+              Zerogeist
+            </Link>
+            <span className="text-xs text-[var(--text-muted)]">/ admin</span>
+          </div>
+          <UserMenu user={user} isAdmin={isAdmin} onLogout={logout} variant="light" />
         </div>
-        <UserMenu user={user} isAdmin={isAdmin} onLogout={logout} variant="light" />
       </header>
 
       <div className="max-w-5xl mx-auto px-6 py-8">
