@@ -96,14 +96,14 @@ function PersonsTab() {
           placeholder="Email address"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="flex-1 bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[var(--fire-600)]"
+          className="flex-1 bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg px-4 py-2 text-sm text-[var(--text-body)] focus:outline-none focus:border-[var(--fire-600)]"
         />
         <input
           type="text"
           placeholder="Note (optional)"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          className="flex-1 bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[var(--fire-600)]"
+          className="flex-1 bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg px-4 py-2 text-sm text-[var(--text-body)] focus:outline-none focus:border-[var(--fire-600)]"
         />
         <button
           type="submit"
@@ -602,7 +602,7 @@ function PromptsTab() {
                 <textarea
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
-                  className="w-full bg-[var(--surface-input)] border-[0.5px] border-[var(--surface-border)] rounded-lg p-4 text-sm text-white font-mono resize-y focus:outline-none focus:border-[var(--fire-600)] transition-colors"
+                  className="w-full bg-[var(--surface-input)] border-[0.5px] border-[var(--surface-border)] rounded-lg p-4 text-sm text-[var(--text-body)] font-mono resize-y focus:outline-none focus:border-[var(--fire-600)] transition-colors"
                   style={{ minHeight: "300px" }}
                   placeholder="Enter the prompt template. Use ${provinceContext}, ${postsText}, ${provinceSummaryText} etc. as placeholders — they'll be filled in at runtime."
                 />
