@@ -38,7 +38,7 @@ interface SourceData {
 }
 
 export interface WorldAnalysis {
-  nationalDigest: string;
+  fieldState: string;
   nationalEmotion: { anger: number; hope: number; fear: number; joy: number; grief: number };
   nationalIntensity: number;
   nationalConsensus: number;
@@ -55,7 +55,7 @@ interface ProvinceAnalysis {
   emotions: { anger: number; hope: number; fear: number; joy: number; grief: number };
   intensity: number;
   consensus: number;
-  weather_description: string;
+  geist_reading: string;
   themes: { name: string; emotion: string; intensity: number; posts: number; summary: string }[];
   voices: { text: string; emotion: string; source: string }[];
 }
@@ -125,7 +125,7 @@ ${pmgSummary || "No PMG data available."}
 Return a JSON object with this exact structure:
 
 {
-  "national_digest": "2-3 sentences using weather metaphor language — atmospheric, meteorological. Must be specific to South Africa. Must not read like a news summary. Example register: 'A low-pressure system has settled over the economic conversation, heavy with the kind of exhaustion that comes after a long argument nobody won.'",
+  "field_state": "2-3 sentences using weather metaphor language — atmospheric, meteorological. Must be specific to South Africa. Must not read like a news summary. Example register: 'A low-pressure system has settled over the economic conversation, heavy with the kind of exhaustion that comes after a long argument nobody won.'",
   "national_emotion": { "anger": 0.0-1.0, "hope": 0.0-1.0, "fear": 0.0-1.0, "joy": 0.0-1.0, "grief": 0.0-1.0 },
   "national_intensity": 0.0-1.0,
   "national_consensus": 0.0-1.0,
@@ -137,7 +137,7 @@ Return a JSON object with this exact structure:
       "emotions": { "anger": 0.0-1.0, "hope": 0.0-1.0, "fear": 0.0-1.0, "joy": 0.0-1.0, "grief": 0.0-1.0 },
       "intensity": 0.0-1.0,
       "consensus": 0.0-1.0,
-      "weather_description": "One evocative sentence, weather metaphor, South African context",
+      "geist_reading": "One evocative sentence, weather metaphor, South African context",
       "themes": [
         { "name": "max 4 words", "emotion": "anger|hope|fear|joy|grief", "intensity": 0.0-1.0, "posts": 0, "summary": "One sentence: what people are actually saying about this" }
       ],
@@ -171,7 +171,7 @@ Return ONLY the JSON object, no markdown, no explanation.`;
     const parsed = JSON.parse(text);
 
     return {
-      nationalDigest: parsed.national_digest,
+      fieldState: parsed.field_state,
       nationalEmotion: parsed.national_emotion,
       nationalIntensity: parsed.national_intensity,
       nationalConsensus: parsed.national_consensus,

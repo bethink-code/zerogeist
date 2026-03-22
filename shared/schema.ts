@@ -138,7 +138,7 @@ export const worldSnapshot = pgTable("world_snapshot", {
   date: date("date").notNull().unique(),
   generatedAt: timestamp("generated_at").defaultNow().notNull(),
   sourceIds: jsonb("source_ids").default([]).notNull(),
-  nationalDigest: text("national_digest"),
+  fieldState: text("field_state"),
   nationalEmotion: jsonb("national_emotion"),
   nationalIntensity: real("national_intensity"),
   nationalConsensus: real("national_consensus"),

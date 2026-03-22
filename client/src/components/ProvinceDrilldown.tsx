@@ -20,20 +20,20 @@ interface Province {
   emotions: Record<Emotion, number>;
   intensity: number;
   consensus: number;
-  weather_description: string;
+  geist_reading: string;
   themes: { name: string; emotion: Emotion; intensity: number; posts: number; summary: string }[];
   voices: any[];
 }
 
 interface Props {
   province: Province;
-  nationalDigest: string;
+  fieldState: string;
   onBack: () => void;
 }
 
 type SortMode = "engagement" | "newest" | "source";
 
-export default function ProvinceDrilldown({ province, nationalDigest, onBack }: Props) {
+export default function ProvinceDrilldown({ province, fieldState, onBack }: Props) {
   const [expandedTheme, setExpandedTheme] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("engagement");
 
@@ -112,15 +112,15 @@ export default function ProvinceDrilldown({ province, nationalDigest, onBack }: 
 
       {/* Narrative bridge — national context flowing into province */}
       <div className="space-y-3">
-        <p className="text-xs text-[var(--zg-muted)] italic">{nationalDigest}</p>
+        <p className="text-xs text-[var(--zg-muted)] italic">{fieldState}</p>
         {!isLoading && posts.length === 0 ? (
           <div className="bg-[var(--zg-surface)] border border-[var(--zg-border)] rounded-lg p-8 text-center">
-            <p className="text-[var(--zg-muted)]">No sources reporting from {province.name} today.</p>
+            <p className="text-[var(--zg-muted)]">No signal from {province.name} today.</p>
             <p className="text-xs text-[var(--zg-muted)] mt-2">This province had no posts in today's data collection.</p>
           </div>
         ) : (
           <>
-            <p className="text-gray-300 italic text-lg">{province.weather_description}</p>
+            <p className="text-gray-300 italic text-lg">{province.geist_reading}</p>
             <p className="text-xs text-[var(--zg-muted)]">
               Based on {posts.length} posts{freshCount < posts.length ? ` (${freshCount} from today)` : ""}
             </p>

@@ -74,15 +74,15 @@ export default function Dashboard() {
 
       <main className="max-w-4xl mx-auto px-6 py-12 space-y-16">
         {/* National Digest */}
-        {snapshot?.nationalDigest ? (
+        {snapshot?.fieldState ? (
           <section className="space-y-4">
             <h2 className="text-xs tracking-widest uppercase text-[var(--zg-muted)]">
-              Today's Weather
+              Field State
             </h2>
             <p className="text-lg leading-relaxed text-gray-300">
               {worldData.personalised
-                ? worldData.personalDigest || snapshot.nationalDigest
-                : snapshot.nationalDigest}
+                ? worldData.personalDigest || snapshot.fieldState
+                : snapshot.fieldState}
             </p>
             <p className="text-xs text-[var(--zg-muted)] mt-2">
               {snapshot.date}
@@ -97,10 +97,10 @@ export default function Dashboard() {
         ) : (
           <section className="space-y-4">
             <h2 className="text-xs tracking-widest uppercase text-[var(--zg-muted)]">
-              Today's Weather
+              Field State
             </h2>
             <p className="text-[var(--zg-muted)] text-sm">
-              The weather map is still being generated. Check back soon.
+              The field is still forming. Check back soon.
             </p>
           </section>
         )}
@@ -141,14 +141,14 @@ export default function Dashboard() {
               {drilldown.type === "province" && (
                 <ProvinceDrilldown
                   province={drilldown.province}
-                  nationalDigest={snapshot.nationalDigest || ""}
+                  fieldState={snapshot.fieldState || ""}
                   onBack={() => setDrilldown({ type: "map" })}
                 />
               )}
 
               {drilldown.type === "national" && (
                 <NationalDrilldown
-                  nationalDigest={snapshot.nationalDigest || ""}
+                  fieldState={snapshot.fieldState || ""}
                   onBack={() => setDrilldown({ type: "map" })}
                 />
               )}
@@ -182,7 +182,7 @@ export default function Dashboard() {
   );
 }
 
-function NationalDrilldown({ nationalDigest, onBack }: { nationalDigest: string; onBack: () => void }) {
+function NationalDrilldown({ fieldState, onBack }: { fieldState: string; onBack: () => void }) {
   const { data: posts = [], isLoading } = usePostsQuery({
     queryKey: ["national-posts"],
     queryFn: () => apiRequest("/api/posts/today?province=national"),
@@ -221,7 +221,7 @@ function NationalDrilldown({ nationalDigest, onBack }: { nationalDigest: string;
         <span className="text-xs text-[var(--zg-muted)]">Posts not tied to a specific province</span>
       </div>
 
-      <p className="text-xs text-[var(--zg-muted)] italic">{nationalDigest}</p>
+      <p className="text-xs text-[var(--zg-muted)] italic">{fieldState}</p>
       <p className="text-xs text-[var(--zg-muted)]">
         {posts.length} national posts
       </p>

@@ -9,7 +9,7 @@ interface Province {
   emotions: Record<Emotion, number>;
   intensity: number;
   consensus: number;
-  weather_description: string;
+  geist_reading: string;
   themes: any[];
   voices: any[];
 }
@@ -221,7 +221,7 @@ export default function GeistField({
           >
             <p className="text-sm font-medium">{hovered.name}</p>
             <p className="text-xs text-[var(--zg-muted)] mt-1 italic">
-              {hovered.weather_description}
+              {hovered.geist_reading}
             </p>
             <div className="flex gap-2 mt-2">
               {Object.entries(hovered.emotions)
@@ -251,11 +251,11 @@ export default function GeistField({
           Intensity: <span className="text-white">{(nationalIntensity * 100).toFixed(0)}%</span>
         </span>
         <span>
-          Dominant:{" "}
+          Charge:{" "}
           <span style={{ color: nationalColor }}>{nationalDominant}</span>
         </span>
         <span>
-          {activeProvinces.length}/9 provinces reporting
+          {activeProvinces.length}/9 provinces active
         </span>
       </div>
     </div>

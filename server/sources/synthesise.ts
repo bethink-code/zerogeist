@@ -41,7 +41,7 @@ interface SummaryRow {
 }
 
 export interface WorldAnalysis {
-  nationalDigest: string;
+  fieldState: string;
   nationalEmotion: Record<Emotion, number>;
   nationalIntensity: number;
   nationalConsensus: number;
@@ -153,23 +153,25 @@ export async function synthesiseWorld(
   // Load custom prompt from DB, fall back to default
   const customPrompt = await storage.getSystemPrompt("sonnet_synthesise");
 
-  const defaultPrompt = `You are the synthesis engine for Zerogeist — a platform that reads South Africa's emotional weather daily.
+  const defaultPrompt = `You are the sensing voice of Zerogeist — a platform that reads the living state of South Africa daily through real human expression.
 
-You have pre-analysed summaries of \${totalRawPosts} South African posts from Reddit, Twitter/X, ReliefWeb, and PMG. The posts have already been geo-attributed, emotionally scored, and voices extracted by a prior analysis stage. Your job is creative synthesis — weave the data into weather.
+The person opening this has not come for news or analysis. They have come to feel the country. Your output is what they encounter first. It should land like walking into a room and immediately knowing something about it — the charge in the air, what is alive, what is suppressed, where energy is concentrating and where it has gone quiet.
+
+This is not weather. It is geist — the spirit of a place at a moment in time.
 
 ## Pre-Analysed Province Data
 
 \${provinceSummaryText}
 
-## Output Requirements
-
-Produce a JSON object with this structure:
+## What to produce
 
 {
-  "national_digest": "2-3 sentences using weather metaphor language — atmospheric, meteorological. Specific to South Africa. Honest about what the data shows. Must not read like a news summary.",
+  "field_state": "2-3 sentences. What is the state of the field today — the ambient condition of South Africa as a whole? Speak to energy, charge, tension, presence. Where is the country's attention concentrating? What is unresolved? What is alive? Do not smooth contradiction — if hope and anger are both high, that is the reading. Make it feel true, not tidy.",
+
   "national_emotion": { "anger": 0.0-1.0, "hope": 0.0-1.0, "fear": 0.0-1.0, "joy": 0.0-1.0, "grief": 0.0-1.0 },
   "national_intensity": 0.0-1.0,
   "national_consensus": 0.0-1.0,
+
   "provinces": [
     {
       "id": "GP|WC|KZN|EC|FS|NW|NC|MP|LP",
@@ -178,30 +180,44 @@ Produce a JSON object with this structure:
       "emotions": { "anger": 0.0-1.0, "hope": 0.0-1.0, "fear": 0.0-1.0, "joy": 0.0-1.0, "grief": 0.0-1.0 },
       "intensity": 0.0-1.0,
       "consensus": 0.0-1.0,
-      "weather_description": "One evocative sentence, weather metaphor, South African context",
+      "geist_reading": "One sentence. What is the felt presence of this province today? Not what is happening — what is the charge? Ground it in the actual data. Avoid generic language. If it is quiet, say what kind of quiet. If it is live, say what kind of live.",
       "themes": [
-        { "name": "max 4 words", "emotion": "anger|hope|fear|joy|grief", "intensity": 0.0-1.0, "posts": count, "summary": "One sentence" }
+        {
+          "name": "max 4 words, concrete and specific",
+          "emotion": "anger|hope|fear|joy|grief",
+          "intensity": 0.0-1.0,
+          "posts": count,
+          "summary": "One sentence. Not what the theme is — what people are feeling about it right now."
+        }
       ],
       "voices": [
-        { "text": "The pre-extracted voice text from above", "emotion": "anger|hope|fear|joy|grief", "source": "r/sub OR x/@user OR ReliefWeb OR PMG", "time": "today|yesterday|2d ago|this week" }
+        {
+          "text": "Copied exactly from pre-analysed data. Do not rewrite.",
+          "emotion": "anger|hope|fear|joy|grief",
+          "source": "attribution string",
+          "time": "today"
+        }
       ]
     }
   ]
 }
 
-Include ALL 9 provinces. Rules:
-- ONLY use themes and voices that appear in the pre-analysed data above. NEVER invent themes or voices.
-- If a province has 0 posts, set its themes and voices to empty arrays []. Set its weather_description to reflect the silence honestly (e.g. "No weather stations reporting from this province today").
-- The "posts" count in each theme MUST match the actual count from the data. Do not show 0 posts — if a theme has 0 posts, don't include it.
-- Use the pre-extracted voice text exactly as provided. Do NOT re-paraphrase or invent new voices.
-- National/unattributed voices can be distributed to provinces where they thematically fit.
+Rules:
+- ALL 9 provinces must appear
+- Only use themes and voices from the pre-analysed data. Never invent.
+- Voice text copied exactly. Never paraphrased again.
+- Provinces with 0 posts get empty arrays. Their geist_reading reflects genuine absence — not fabricated calm. Silence is a reading too.
+- National voices stay national. Do not redistribute to provinces.
+- field_state must hold contradiction where it exists. A country where hope and anger coexist at high intensity is not settled — say so.
 
-Return ONLY the JSON object, no markdown.`;
+Return ONLY the JSON. No markdown. No preamble.`;
 
   const promptTemplate = customPrompt?.prompt || defaultPrompt;
   const prompt = promptTemplate
     .replace("${totalRawPosts}", String(totalRawPosts))
-    .replace("${provinceSummaryText}", provinceSummaryText);
+    .replace("${provinceSummaryText}", provinceSummaryText)
+    .replace(/\$\{totalRawPosts\}/g, String(totalRawPosts))
+    .replace(/\$\{provinceSummaryText\}/g, provinceSummaryText);
 
   try {
     const response = await client.messages.create({
@@ -214,7 +230,7 @@ Return ONLY the JSON object, no markdown.`;
     const parsed = JSON.parse(text);
 
     return {
-      nationalDigest: parsed.national_digest,
+      fieldState: parsed.field_state,
       nationalEmotion: parsed.national_emotion,
       nationalIntensity: parsed.national_intensity,
       nationalConsensus: parsed.national_consensus,

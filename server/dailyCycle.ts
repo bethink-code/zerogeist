@@ -272,7 +272,7 @@ export async function runDailyCycle(): Promise<void> {
       const sourceIds = activeSources.map((s) => s.id);
       const snapshot = await storage.createWorldSnapshot({
         date: today, sourceIds,
-        nationalDigest: analysis.nationalDigest, nationalEmotion: analysis.nationalEmotion,
+        fieldState: analysis.fieldState, nationalEmotion: analysis.nationalEmotion,
         nationalIntensity: analysis.nationalIntensity, nationalConsensus: analysis.nationalConsensus,
         provinces: analysis.provinces, totalPostsAnalysed: rawPostRows.length,
         analysisCost: sonnetCost,
@@ -286,7 +286,7 @@ export async function runDailyCycle(): Promise<void> {
           await storage.createPersonWorld({
             personId: p.id, snapshotId: snapshot.id, date: today,
             weightedProvinces: analysis.provinces, weightedThemes: null,
-            personalDigest: analysis.nationalDigest, personalQuestionContext: analysis.nationalDigest,
+            personalDigest: analysis.fieldState, personalQuestionContext: analysis.fieldState,
           });
           personsProcessed++;
         } catch (err: any) { /* skip */ }
@@ -351,7 +351,7 @@ export async function runDailyCycle(): Promise<void> {
     const snapshot = await storage.createWorldSnapshot({
       date: today,
       sourceIds,
-      nationalDigest: analysis.nationalDigest,
+      fieldState: analysis.fieldState,
       nationalEmotion: analysis.nationalEmotion,
       nationalIntensity: analysis.nationalIntensity,
       nationalConsensus: analysis.nationalConsensus,
@@ -376,8 +376,8 @@ export async function runDailyCycle(): Promise<void> {
           date: today,
           weightedProvinces: analysis.provinces,
           weightedThemes: null,
-          personalDigest: analysis.nationalDigest,
-          personalQuestionContext: analysis.nationalDigest,
+          personalDigest: analysis.fieldState,
+          personalQuestionContext: analysis.fieldState,
         });
         personsProcessed++;
       } catch (err: any) {
