@@ -109,6 +109,27 @@ body {
 
   background-color: var(--surface-page);
   color: var(--text-body);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Admin type defaults — so we don't need text-sm on everything */
+.admin-theme h1, .admin-theme h2, .admin-theme h3 {
+  color: var(--text-heading);
+  font-weight: 600;
+}
+
+.admin-theme p, .admin-theme span, .admin-theme label, .admin-theme td {
+  font-size: inherit; /* 14px from .admin-theme */
+}
+
+.admin-theme input, .admin-theme select, .admin-theme textarea {
+  font-size: 14px;
+  color: var(--text-body);
+}
+
+.admin-theme input::placeholder, .admin-theme textarea::placeholder {
+  color: var(--text-placeholder);
 }
 
 /* =============================================================================

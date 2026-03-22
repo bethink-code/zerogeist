@@ -26,7 +26,7 @@ export default function Admin() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`pb-3 text-sm capitalize transition-colors ${
+              className={`pb-3 capitalize transition-colors ${
                 tab === t
                   ? "text-[var(--fire-600)] border-b-2 border-[var(--fire-600)]"
                   : "text-[var(--text-placeholder)] hover:text-[var(--text-secondary)]"
@@ -125,7 +125,7 @@ function PersonsTab() {
               className="bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg p-4 flex items-center justify-between"
             >
               <div>
-                <p className="text-sm font-medium">{p.email}</p>
+                <p className="font-medium">{p.email}</p>
                 {p.note && (
                   <p className="text-xs text-[var(--text-muted)] mt-1">{p.note}</p>
                 )}
@@ -214,12 +214,12 @@ function SourcesTab() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-3">
                     <div className="w-2 h-2 rounded-full" style={sourceTypeDotStyle(s.type)} />
-                    <p className="text-sm font-medium">{s.name}</p>
+                    <p className="font-medium">{s.name}</p>
                     <span className="text-xs text-[var(--text-secondary)] bg-[var(--surface-hover)] px-2 py-0.5 rounded">
                       {s.type}
                     </span>
                   </div>
-                  <p className="text-xs text-[var(--text-muted)]">{s.identifier}</p>
+                  <p className="text-[13px] text-[var(--text-muted)]">{s.identifier}</p>
                 </div>
                 <button
                   onClick={() => toggleMutation.mutate({ id: s.id, active: !s.active })}
@@ -563,8 +563,8 @@ function PromptsTab() {
           <div key={id} className="bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg p-5 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-medium">{meta.name}</h3>
-                <p className="text-xs text-[var(--text-muted)] mt-0.5">{meta.description}</p>
+                <h3 className="font-medium">{meta.name}</h3>
+                <p className="text-[13px] text-[var(--text-muted)] mt-0.5">{meta.description}</p>
               </div>
               <div className="flex gap-2">
                 {!isEditing ? (
