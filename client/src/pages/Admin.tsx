@@ -419,40 +419,42 @@ function HealthTab() {
         )}
       </div>
 
-      {polling && progress && (
+      {(polling || progress) && (
         <div className="bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Cycle Progress</p>
-            <p className="text-xs text-[var(--canola-400)] animate-pulse">{progress.detail}</p>
+            {progress ? (
+              <p className="text-xs text-[var(--canola-400)] animate-pulse">{progress.detail}</p>
+            ) : (
+              <p className="text-xs text-[var(--canola-400)] animate-pulse">Starting...</p>
+            )}
           </div>
-          <div className="space-y-1.5">
-            {(progress.steps || []).map((step: any) => (
-              <div key={step.name} className="flex items-center gap-3">
-                <span className="w-4 text-center">
-                  {step.status === "done" && <span className="text-[var(--succulent-600)]">✓</span>}
-                  {step.status === "running" && <span className="text-[var(--canola-400)] animate-pulse">●</span>}
-                  {step.status === "failed" && <span className="text-[var(--fire-600)]">✗</span>}
-                  {step.status === "pending" && <span className="text-[var(--text-placeholder)]">○</span>}
-                </span>
-                <span className={`text-xs flex-1 ${step.status === "running" ? "text-[var(--text-heading)]" : "text-[var(--text-muted)]"}`}>
-                  {step.name}
-                </span>
-                {step.detail && (
-                  <span className="text-xs text-[var(--text-muted)]">{step.detail}</span>
-                )}
+          {progress && (
+            <>
+              <div className="space-y-1.5">
+                {(progress.steps || []).map((step: any) => (
+                  <div key={step.name} className="flex items-center gap-3">
+                    <span className="w-4 text-center">
+                      {step.status === "done" && <span className="text-[var(--succulent-600)]">✓</span>}
+                      {step.status === "running" && <span className="text-[var(--canola-400)] animate-pulse">●</span>}
+                      {step.status === "failed" && <span className="text-[var(--fire-600)]">✗</span>}
+                      {step.status === "pending" && <span className="text-[var(--text-placeholder)]">○</span>}
+                    </span>
+                    <span className={`text-xs flex-1 ${step.status === "running" ? "text-[var(--text-heading)]" : "text-[var(--text-muted)]"}`}>
+                      {step.name}
+                    </span>
+                    {step.detail && (
+                      <span className="text-xs text-[var(--text-muted)]">{step.detail}</span>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <p className="text-[10px] text-[var(--text-muted)]">
-            Elapsed: {Math.round((Date.now() - progress.startedAt) / 1000)}s
-          </p>
+              <p className="text-[10px] text-[var(--text-muted)]">
+                Elapsed: {Math.round((Date.now() - progress.startedAt) / 1000)}s
+              </p>
+            </>
+          )}
         </div>
-      )}
-
-      {polling && !progress && (
-        <p className="text-xs text-[var(--canola-400)] animate-pulse">
-          Starting cycle...
-        </p>
       )}
 
       {/* Stats */}
