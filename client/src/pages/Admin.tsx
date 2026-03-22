@@ -177,13 +177,14 @@ function SourcesTab() {
     },
   });
 
-  // Status dot reflects run outcome, not source type
-  const statusColor = (status: string | null) => {
-    switch (status) {
-      case "success": return "bg-[var(--succulent-600)]";
-      case "rate_limited": return "bg-[var(--canola-400)]";
-      case "failed": return "bg-[var(--fire-600)]";
-      default: return "bg-[var(--dust-400)]"; // never run
+  // Dot encodes source type, not run status
+  const sourceTypeDotStyle = (type: string) => {
+    switch (type) {
+      case "pmg": return { backgroundColor: "var(--source-pmg)" };
+      case "reliefweb": return { backgroundColor: "var(--source-reliefweb)" };
+      case "reddit": return { backgroundColor: "var(--source-reddit)" };
+      case "twitter": return { backgroundColor: "var(--source-twitter)" };
+      default: return { backgroundColor: "var(--dust-400)" };
     }
   };
 
@@ -212,7 +213,7 @@ function SourcesTab() {
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
                   <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${statusColor(s.lastRunStatus)}`} />
+                    <div className="w-2 h-2 rounded-full" style={sourceTypeDotStyle(s.type)} />
                     <p className="text-sm font-medium">{s.name}</p>
                     <span className="text-xs text-[var(--text-secondary)] bg-[var(--surface-hover)] px-2 py-0.5 rounded">
                       {s.type}

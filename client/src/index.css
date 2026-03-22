@@ -5,14 +5,14 @@
    The default. Dark field, glowing hotspots, atmospheric.
    ============================================================================= */
 :root {
-  /* Legacy aliases (still used by some components) */
+  /* Legacy aliases (still used by person-facing components) */
   --zg-teal: #2dd4a8;
   --zg-dark: #0a0a0a;
   --zg-muted: #737373;
   --zg-border: #262626;
   --zg-surface: #141414;
 
-  /* Emotion tokens — geist field colours */
+  /* Emotion tokens — used by geist field and drill-downs */
   --emotion-anger: #C85A1A;
   --emotion-hope: #7A9E68;
   --emotion-fear: #3E7BBF;
@@ -34,60 +34,81 @@ body {
 }
 
 /* =============================================================================
-   ADMIN — Parchment light theme (Zed-inspired · Aloe ferox palette)
-   Applied via .admin-theme class on the admin wrapper
+   ADMIN — Parchment light theme (Aloe ferox · Zed-inspired)
+   Applied via .admin-theme class on the admin wrapper.
+   Full token system from zerogeist-tokens.js.
    ============================================================================= */
 .admin-theme {
-  --surface-card:     #FFFFFF;
-  --surface-input:    #FAF7F0;
-  --surface-page:     #F5F1E8;
-  --surface-sidebar:  #EDE8D8;
-  --surface-titlebar: #EEE8D8;
-  --surface-border:   #DDD5C0;
-  --surface-hover:    #E8E0CC;
+  /* Surfaces */
+  --surface-card:       #FFFFFF;
+  --surface-input:      #FAF7F0;
+  --surface-page:       #F5F1E8;
+  --surface-sidebar:    #EDE8D8;
+  --surface-titlebar:   #EEE8D8;
+  --surface-border:     #DDD5C0;
+  --surface-hover:      #E8E0CC;
 
-  --text-heading:     #2C2418;
-  --text-body:        #3A3020;
-  --text-secondary:   #5C5040;
-  --text-muted:       #8A7860;
-  --text-placeholder: #B0A090;
+  /* Type scale */
+  --text-heading:       #2C2418;
+  --text-body:          #3A3020;
+  --text-secondary:     #5C5040;
+  --text-muted:         #8A7860;
+  --text-placeholder:   #B0A090;
 
-  --fire-600:         #C85A1A;
-  --fire-50:          #FDF0E8;
-  --fire-800:         #963D0E;
+  /* Fire ramp */
+  --fire-50:            #FDF0E8;
+  --fire-100:           #F9CEAF;
+  --fire-200:           #F0A06A;
+  --fire-400:           #E07030;
+  --fire-600:           #C85A1A;
+  --fire-800:           #963D0E;
+  --fire-900:           #5C2206;
 
-  --succulent-600:    #7A9E68;
-  --succulent-50:     #EEF4EA;
+  /* Succulent ramp */
+  --succulent-50:       #EEF4EA;
+  --succulent-100:      #C4DDB6;
+  --succulent-200:      #9AC488;
+  --succulent-400:      #5C7A50;
+  --succulent-600:      #7A9E68;
+  --succulent-800:      #3D5C2E;
+  --succulent-900:      #1E3014;
+
+  /* Canola ramp */
+  --canola-50:          #FDF6E0;
+  --canola-400:         #D4A827;
+  --canola-800:         #6E5208;
+
+  /* Sky ramp */
+  --sky-50:             #E8F0F8;
+  --sky-400:            #3E7BBF;
+  --sky-600:            #1F5C99;
+
+  /* Dusk ramp */
+  --dusk-50:            #F0EDF5;
+  --dusk-400:           #6A5278;
+  --dusk-800:           #2E1E3C;
+
+  /* Dust ramp */
+  --dust-400:           #A89880;
+  --dust-600:           #8A7860;
+
+  /* Emotion pill pairs — bg + text, NO borders */
+  --emotion-anger-bg:   #FDF0E8;   --emotion-anger-text: #963D0E;
+  --emotion-hope-bg:    #EEF4EA;   --emotion-hope-text:  #3D5C2E;
+  --emotion-fear-bg:    #E8F0F8;   --emotion-fear-text:  #1F5C99;
+  --emotion-joy-bg:     #FDF6E0;   --emotion-joy-text:   #6E5208;
+  --emotion-grief-bg:   #F0EDF5;   --emotion-grief-text: #4A3558;
+
+  /* Source type dots — encodes signal origin, not status */
+  --source-reddit:      #C85A1A;   /* fire-600 — public voice */
+  --source-pmg:         #3E7BBF;   /* sky-400  — institutional */
+  --source-reliefweb:   #7A9E68;   /* succulent-600 — humanitarian */
+  --source-twitter:     #8A7860;   /* dust-600 — social */
+
+  /* Pill rules: filled bg + dark text. NEVER add border to pills. */
+  --pill-type-bg:       #E8E0CC;   /* surface-hover */
+  --pill-type-text:     #5C5040;   /* text-secondary */
 
   background-color: var(--surface-page);
   color: var(--text-body);
-}
-
-/* Admin overrides for common utility patterns */
-.admin-theme .zg-card {
-  background-color: var(--surface-card);
-  border-color: var(--surface-border);
-}
-
-.admin-theme .zg-input {
-  background-color: var(--surface-input);
-  border-color: var(--surface-border);
-  color: var(--text-body);
-}
-
-.admin-theme .zg-muted {
-  color: var(--text-muted);
-}
-
-.admin-theme .zg-heading {
-  color: var(--text-heading);
-}
-
-.admin-theme .zg-btn-primary {
-  background-color: var(--fire-600);
-  color: white;
-}
-
-.admin-theme .zg-btn-primary:hover {
-  background-color: #B05018;
 }
