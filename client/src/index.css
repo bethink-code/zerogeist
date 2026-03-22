@@ -1,20 +1,27 @@
 @import "tailwindcss";
 
+/* =============================================================================
+   ZEROGEIST — Person Interface (dark geist theme)
+   The default. Dark field, glowing hotspots, atmospheric.
+   ============================================================================= */
 :root {
+  /* Legacy aliases (still used by some components) */
   --zg-teal: #2dd4a8;
   --zg-dark: #0a0a0a;
   --zg-muted: #737373;
   --zg-border: #262626;
   --zg-surface: #141414;
-  --zg-anger: #ef4444;
-  --zg-hope: #2dd4bf;
-  --zg-fear: #3b82f6;
-  --zg-joy: #f59e0b;
-  --zg-grief: #a855f7;
+
+  /* Emotion tokens — geist field colours */
+  --emotion-anger: #C85A1A;
+  --emotion-hope: #7A9E68;
+  --emotion-fear: #3E7BBF;
+  --emotion-joy: #D4A827;
+  --emotion-grief: #6A5278;
 }
 
 body {
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-family: system-ui, -apple-system, sans-serif;
   background-color: var(--zg-dark);
   color: #fafafa;
   margin: 0;
@@ -24,4 +31,63 @@ body {
 
 * {
   box-sizing: border-box;
+}
+
+/* =============================================================================
+   ADMIN — Parchment light theme (Zed-inspired · Aloe ferox palette)
+   Applied via .admin-theme class on the admin wrapper
+   ============================================================================= */
+.admin-theme {
+  --surface-card:     #FFFFFF;
+  --surface-input:    #FAF7F0;
+  --surface-page:     #F5F1E8;
+  --surface-sidebar:  #EDE8D8;
+  --surface-titlebar: #EEE8D8;
+  --surface-border:   #DDD5C0;
+  --surface-hover:    #E8E0CC;
+
+  --text-heading:     #2C2418;
+  --text-body:        #3A3020;
+  --text-secondary:   #5C5040;
+  --text-muted:       #8A7860;
+  --text-placeholder: #B0A090;
+
+  --fire-600:         #C85A1A;
+  --fire-50:          #FDF0E8;
+  --fire-800:         #963D0E;
+
+  --succulent-600:    #7A9E68;
+  --succulent-50:     #EEF4EA;
+
+  background-color: var(--surface-page);
+  color: var(--text-body);
+}
+
+/* Admin overrides for common utility patterns */
+.admin-theme .zg-card {
+  background-color: var(--surface-card);
+  border-color: var(--surface-border);
+}
+
+.admin-theme .zg-input {
+  background-color: var(--surface-input);
+  border-color: var(--surface-border);
+  color: var(--text-body);
+}
+
+.admin-theme .zg-muted {
+  color: var(--text-muted);
+}
+
+.admin-theme .zg-heading {
+  color: var(--text-heading);
+}
+
+.admin-theme .zg-btn-primary {
+  background-color: var(--fire-600);
+  color: white;
+}
+
+.admin-theme .zg-btn-primary:hover {
+  background-color: #B05018;
 }
