@@ -241,9 +241,40 @@ export default function PostDrawer({
               No voices in this stream yet.
             </p>
           ) : (
-            posts.map((post) => (
-              <PostCard key={post.id} post={post} compact darkSurface onReadMore={setReadingPost} />
-            ))
+            <>
+              {posts.map((post) => (
+                <PostCard key={post.id} post={post} compact darkSurface onReadMore={setReadingPost} />
+              ))}
+              {/* Scroll hint — fades out after 3s */}
+              <style>{`
+                @keyframes scrollHintFade {
+                  0%, 70% { opacity: 1; }
+                  100% { opacity: 0; }
+                }
+              `}</style>
+              <div
+                style={{
+                  position: "sticky",
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  display: "flex",
+                  justifyContent: "center",
+                  padding: "8px 0 4px",
+                  background: "linear-gradient(transparent, #3A3020)",
+                  pointerEvents: "none",
+                  animation: "scrollHintFade 4s ease forwards",
+                }}
+              >
+                <span style={{
+                  fontSize: 10,
+                  color: "rgba(245,241,232,0.3)",
+                  letterSpacing: "0.05em",
+                }}>
+                  ↕ scroll for more
+                </span>
+              </div>
+            </>
           )}
         </div>
 
