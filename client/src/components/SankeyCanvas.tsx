@@ -64,8 +64,10 @@ export default function SankeyCanvas({
   const animRef = useRef<number | null>(null);
   const renderLayoutRef = useRef<SankeyLayout | null>(null);
   const nodeIndexMapRef = useRef<Map<number, string>>(new Map());
-  // Congestion zoom state
-  const [zoomArea, setZoomArea] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  // Congestion zoom
+  interface CongestionZone { col: number; yMin: number; yMax: number; hiddenNodes: string[]; cx: number; cy: number }
+  const [congestionZones, setCongestionZones] = useState<CongestionZone[]>([]);
+  const [zoomZone, setZoomZone] = useState<CongestionZone | null>(null);
 
   // Photo image caching
   const photoRef = useRef<HTMLImageElement | null>(null);
@@ -280,9 +282,9 @@ export default function SankeyCanvas({
       }
 
       // Second pass: draw labels with collision avoidance
-      const MIN_LABEL_GAP = 14; // minimum pixels between label centers
+      const MIN_LABEL_GAP = 14;
+      const zones: CongestionZone[] = [];
 
-      // Group nodes by column, sorted by y position
       for (const col of [0, 1, 2] as const) {
         const colNodes = currentLayout.nodes
           .filter((n) => n.column === col && n.height > 0)
@@ -312,6 +314,24 @@ export default function SankeyCanvas({
           } else {
             labels.push({ node, y: labelY, show: false });
           }
+        }
+
+        // Detect if any labels are hidden in this column — one zone per column
+        const hiddenLabels = labels.filter((l) => !l.show);
+        if (hiddenLabels.length >= 2) {
+          const hiddenY = hiddenLabels.map((l) => l.y);
+          const yMin = Math.min(...hiddenY);
+          const yMax = Math.max(...hiddenY);
+          const cx = colX[col] - 16;
+          const cy = (yMin + yMax) / 2;
+          zones.push({
+            col,
+            yMin: yMin - 10,
+            yMax: yMax + 10,
+            hiddenNodes: hiddenLabels.map((l) => l.node.id),
+            cx,
+            cy,
+          });
         }
 
         // Draw visible labels
@@ -357,6 +377,9 @@ export default function SankeyCanvas({
           ctx.globalAlpha = 1;
         }
       }
+
+      // Update congestion zones for DOM button rendering
+      setCongestionZones(zones);
     },
     [hoveredNode, highlightedNode]
   );
@@ -541,6 +564,143 @@ export default function SankeyCanvas({
       />
 
       {/* Empty state overlay */}
+      {/* Congestion zone buttons */}
+      {congestionZones.map((zone, i) => (
+        <button
+          key={i}
+          onClick={() => setZoomZone(zone)}
+          style={{
+            position: "absolute",
+            left: zone.cx - 20,
+            top: zone.cy - 20,
+            width: 40,
+            height: 40,
+            borderRadius: "50%",
+            border: "1px solid rgba(221, 213, 192, 0.5)",
+            backgroundColor: "#FFFFFF",
+            boxShadow: "0 2px 8px rgba(44,36,24,0.08)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 5,
+            transition: "transform 150ms, box-shadow 150ms",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = "scale(1.1)";
+            e.currentTarget.style.boxShadow = "0 4px 12px rgba(44,36,24,0.15)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = "scale(1)";
+            e.currentTarget.style.boxShadow = "0 2px 8px rgba(44,36,24,0.08)";
+          }}
+          title={`${zone.hiddenNodes.length} hidden themes — tap to see all`}
+        >
+          <span style={{ fontSize: 20, fontWeight: 300, color: "#8A7860", lineHeight: 1 }}>+</span>
+        </button>
+      ))}
+
+      {/* Zoom modal */}
+      {zoomZone && layout && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 10,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {/* Backdrop */}
+          <div
+            onClick={() => setZoomZone(null)}
+            style={{
+              position: "absolute",
+              inset: 0,
+              backgroundColor: "rgba(245, 241, 232, 0.8)",
+              backdropFilter: "blur(2px)",
+            }}
+          />
+          {/* Zoomed content */}
+          <div
+            style={{
+              position: "relative",
+              width: "80%",
+              maxWidth: 500,
+              backgroundColor: "#FFFFFF",
+              border: "1px solid #DDD5C0",
+              borderRadius: 10,
+              boxShadow: "0 8px 32px rgba(44,36,24,0.12)",
+              padding: "20px 24px",
+              maxHeight: "70vh",
+              overflowY: "auto",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: "#2C2418", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                All themes
+              </p>
+              <button
+                onClick={() => setZoomZone(null)}
+                style={{ border: "none", background: "none", cursor: "pointer", fontSize: 18, color: "#8A7860", padding: "2px 6px" }}
+              >
+                ✕
+              </button>
+            </div>
+            {/* All theme nodes, sorted by value */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {layout.nodes
+                .filter((n) => n.column === zoomZone.col && n.height > 0)
+                .sort((a, b) => b.value - a.value)
+                .map((node) => (
+                  <button
+                    key={node.id}
+                    onClick={() => {
+                      setZoomZone(null);
+                      onNodeClick(node.id);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "8px 12px",
+                      border: "1px solid #EDE8D8",
+                      borderRadius: 6,
+                      backgroundColor: "#FAF7F0",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      transition: "background-color 150ms",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#EDE8D8"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#FAF7F0"; }}
+                  >
+                    <div
+                      style={{
+                        width: 8,
+                        height: 24,
+                        borderRadius: 2,
+                        backgroundColor: node.color,
+                        opacity: 0.85,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: 13, fontWeight: 500, color: "#2C2418", margin: 0 }}>
+                        {node.label}
+                      </p>
+                    </div>
+                    <span style={{ fontSize: 11, color: "#8A7860", flexShrink: 0 }}>
+                      {node.value}
+                    </span>
+                  </button>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
       {isEmpty && dimsReady && (
         <div
           style={{
