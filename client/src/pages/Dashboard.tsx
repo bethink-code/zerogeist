@@ -8,6 +8,8 @@ import ProvinceNav from "../components/ProvinceNav";
 import PostDrawer from "../components/PostDrawer";
 import DashboardHeader, { type Phase } from "../components/DashboardHeader";
 
+const PROVINCE_ORDER = ["SA", "WC", "NC", "EC", "FS", "NW", "GP", "MP", "LP", "KZN"];
+
 type Emotion = "anger" | "hope" | "fear" | "joy" | "grief";
 
 const PROVINCE_PHOTOS: Record<string, string> = {
@@ -197,6 +199,75 @@ export default function Dashboard() {
           posts={drawerPosts}
           onClose={() => setDrawerNodeId(null)}
         />
+
+        {/* Mobile prev/next province buttons */}
+        {showDashboard && (
+          <>
+            <button
+              onClick={() => {
+                const idx = PROVINCE_ORDER.indexOf(activeProvince);
+                const prev = PROVINCE_ORDER[(idx - 1 + PROVINCE_ORDER.length) % PROVINCE_ORDER.length];
+                handleProvinceSelect(prev);
+              }}
+              style={{
+                position: "absolute",
+                left: 8,
+                top: "50%",
+                transform: "translateY(-50%)",
+                width: 44,
+                height: 44,
+                borderRadius: "50%",
+                border: "1px solid rgba(221,213,192,0.4)",
+                backgroundColor: "rgba(245,241,232,0.9)",
+                boxShadow: "0 2px 8px rgba(44,36,24,0.08)",
+                cursor: "pointer",
+                display: "none",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 5,
+                fontSize: 18,
+                color: "#8A7860",
+              }}
+              className="mobile-nav-btn"
+            >
+              ‹
+            </button>
+            <button
+              onClick={() => {
+                const idx = PROVINCE_ORDER.indexOf(activeProvince);
+                const next = PROVINCE_ORDER[(idx + 1) % PROVINCE_ORDER.length];
+                handleProvinceSelect(next);
+              }}
+              style={{
+                position: "absolute",
+                right: 8,
+                top: "50%",
+                transform: "translateY(-50%)",
+                width: 44,
+                height: 44,
+                borderRadius: "50%",
+                border: "1px solid rgba(221,213,192,0.4)",
+                backgroundColor: "rgba(245,241,232,0.9)",
+                boxShadow: "0 2px 8px rgba(44,36,24,0.08)",
+                cursor: "pointer",
+                display: "none",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 5,
+                fontSize: 18,
+                color: "#8A7860",
+              }}
+              className="mobile-nav-btn"
+            >
+              ›
+            </button>
+            <style>{`
+              @media (max-width: 768px) {
+                .mobile-nav-btn { display: flex !important; }
+              }
+            `}</style>
+          </>
+        )}
       </main>
 
       <nav
