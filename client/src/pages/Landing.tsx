@@ -6,11 +6,11 @@ export default function Landing() {
       <div className="max-w-sm w-full text-center space-y-12">
         {/* Logo */}
         <div>
-          <h1 className="text-3xl font-bold tracking-[0.3em] uppercase">
+          <h1 className="text-3xl font-normal tracking-[0.3em] uppercase">
             Zerogeist
           </h1>
-          <p className="text-[var(--zg-teal)] text-sm mt-2 italic">
-            The spirit of zero. The mood of now.
+          <p className="text-sm mt-2 italic" style={{ color: "rgba(255,255,255,0.3)" }}>
+            The world unfiltered. Filtered by you.
           </p>
         </div>
 

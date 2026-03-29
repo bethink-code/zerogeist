@@ -322,8 +322,8 @@ export default function SankeyCanvas({
           const hiddenY = hiddenLabels.map((l) => l.y);
           const yMin = Math.min(...hiddenY);
           const yMax = Math.max(...hiddenY);
-          const cx = colX[col] - 16;
-          const cy = (yMin + yMax) / 2;
+          const cx = colX[col] - 24;
+          const cy = (yMin + yMax) / 2 - 12;
           zones.push({
             col,
             yMin: yMin - 10,

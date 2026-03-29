@@ -305,7 +305,7 @@ export default function DashboardHeader({
                 pointerEvents: "none",
               }}
             >
-              Reading the field{"\u2026"}
+              The world unfiltered. Filtered by you.
             </p>
 
             {/* Real quote — same grid cell, crossfades in */}
