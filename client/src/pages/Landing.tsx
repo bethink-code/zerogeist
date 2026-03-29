@@ -25,7 +25,20 @@ export default function Landing() {
         <div>
           <a
             href="/auth/google"
-            className="inline-flex items-center gap-3 bg-white text-[var(--zg-dark)] px-6 py-3 rounded-lg font-medium text-sm hover:bg-gray-100 transition-colors"
+            className="inline-flex items-center gap-3 px-6 py-3 rounded-lg font-medium text-sm transition-all"
+            style={{
+              backgroundColor: "rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.7)",
+              border: "1px solid rgba(255,255,255,0.12)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.14)";
+              e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
+              e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
+            }}
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
