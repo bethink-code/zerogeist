@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, useState } from "react";
+import { useRef, useEffect, useMemo, useState, useCallback } from "react";
 import PostCard from "./PostCard";
 import type { Post } from "../lib/sankeyLayout";
 
@@ -45,13 +45,34 @@ export default function PostDrawer({
 }: PostDrawerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [readingPost, setReadingPost] = useState<Post | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
     if (isOpen && scrollRef.current) {
       scrollRef.current.scrollTop = 0;
     }
-    if (!isOpen) setReadingPost(null);
+    if (!isOpen) {
+      setReadingPost(null);
+      setCurrentIndex(0);
+    }
   }, [isOpen, nodeLabel]);
+
+  // Clamp index when posts change
+  useEffect(() => {
+    if (currentIndex >= posts.length && posts.length > 0) {
+      setCurrentIndex(posts.length - 1);
+    }
+  }, [posts.length, currentIndex]);
+
+  const goNext = useCallback(() => {
+    if (currentIndex < posts.length - 1) setCurrentIndex((i) => i + 1);
+  }, [currentIndex, posts.length]);
+
+  const goPrev = useCallback(() => {
+    if (currentIndex > 0) setCurrentIndex((i) => i - 1);
+  }, [currentIndex]);
+
+  const currentPost = posts[currentIndex] || null;
 
   // Sub-header summary
   const subHeader = useMemo(() => {
@@ -207,26 +228,15 @@ export default function PostDrawer({
           </button>
         </div>
 
-        {/* Post masonry — scrollable, CSS columns */}
+        {/* Single post view — scrollable */}
         <div
           ref={scrollRef}
-          className="drawer-scroll"
           style={{
             flex: 1,
             overflowY: "auto",
             padding: "12px 20px 20px",
-            columns: "320px",
-            columnGap: 12,
-            maskImage: "linear-gradient(180deg, transparent 0px, black 12px, black calc(100% - 20px), transparent 100%)",
-            WebkitMaskImage: "linear-gradient(180deg, transparent 0px, black 12px, black calc(100% - 20px), transparent 100%)",
           }}
         >
-          <style>{`
-            .drawer-scroll::-webkit-scrollbar { width: 6px; }
-            .drawer-scroll::-webkit-scrollbar-track { background: transparent; }
-            .drawer-scroll::-webkit-scrollbar-thumb { background: rgba(245, 241, 232, 0.12); border-radius: 3px; }
-            .drawer-scroll::-webkit-scrollbar-thumb:hover { background: rgba(245, 241, 232, 0.2); }
-          `}</style>
           {posts.length === 0 ? (
             <p
               style={{
@@ -240,43 +250,70 @@ export default function PostDrawer({
             >
               No voices in this stream yet.
             </p>
-          ) : (
-            <>
-              {posts.map((post) => (
-                <PostCard key={post.id} post={post} compact darkSurface onReadMore={setReadingPost} />
-              ))}
-              {/* Scroll hint — fades out after 3s */}
-              <style>{`
-                @keyframes scrollHintFade {
-                  0%, 70% { opacity: 1; }
-                  100% { opacity: 0; }
-                }
-              `}</style>
-              <div
-                style={{
-                  position: "sticky",
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  display: "flex",
-                  justifyContent: "center",
-                  padding: "8px 0 4px",
-                  background: "linear-gradient(transparent, #3A3020)",
-                  pointerEvents: "none",
-                  animation: "scrollHintFade 4s ease forwards",
-                }}
-              >
-                <span style={{
-                  fontSize: 10,
-                  color: "rgba(245,241,232,0.3)",
-                  letterSpacing: "0.05em",
-                }}>
-                  ↕ scroll for more
-                </span>
-              </div>
-            </>
-          )}
+          ) : currentPost ? (
+            <PostCard post={currentPost} darkSurface onReadMore={setReadingPost} />
+          ) : null}
         </div>
+
+        {/* Navigation bar — prev / counter / next */}
+        {posts.length > 1 && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "8px 16px 10px",
+              borderTop: "1px solid rgba(221, 213, 192, 0.08)",
+              flexShrink: 0,
+            }}
+          >
+            <button
+              onClick={goPrev}
+              disabled={currentIndex === 0}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                border: "1px solid rgba(221,213,192,0.15)",
+                backgroundColor: currentIndex === 0 ? "transparent" : "rgba(245,241,232,0.06)",
+                color: currentIndex === 0 ? "rgba(245,241,232,0.15)" : "rgba(245,241,232,0.6)",
+                cursor: currentIndex === 0 ? "default" : "pointer",
+                fontSize: 20,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "all 150ms",
+              }}
+            >
+              ‹
+            </button>
+
+            <span style={{ fontSize: 12, color: "rgba(245,241,232,0.4)" }}>
+              {currentIndex + 1} / {posts.length}
+            </span>
+
+            <button
+              onClick={goNext}
+              disabled={currentIndex >= posts.length - 1}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                border: "1px solid rgba(221,213,192,0.15)",
+                backgroundColor: currentIndex >= posts.length - 1 ? "transparent" : "rgba(245,241,232,0.06)",
+                color: currentIndex >= posts.length - 1 ? "rgba(245,241,232,0.15)" : "rgba(245,241,232,0.6)",
+                cursor: currentIndex >= posts.length - 1 ? "default" : "pointer",
+                fontSize: 20,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "all 150ms",
+              }}
+            >
+              ›
+            </button>
+          </div>
+        )}
 
         {/* ═══ Reading modal ═══ */}
         {readingPost && (
