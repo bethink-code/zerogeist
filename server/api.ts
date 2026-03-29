@@ -13,6 +13,7 @@ import routes from "./routes.js";
 import { pool } from "./db.js";
 
 const app = express();
+app.set("trust proxy", 1); // Trust Vercel's HTTPS proxy
 const PgStore = ConnectPgSimple(session);
 
 app.use(helmet());

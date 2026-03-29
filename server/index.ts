@@ -10,6 +10,7 @@ import routes from "./routes.js";
 import { pool } from "./db.js";
 
 const app = express();
+app.set("trust proxy", 1);
 const PgStore = ConnectPgSimple(session);
 
 // Security headers — relaxed CSP for development

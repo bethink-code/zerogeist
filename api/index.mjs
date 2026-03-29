@@ -2507,6 +2507,7 @@ var routes_default = router;
 // server/api.ts
 init_db();
 var app = express();
+app.set("trust proxy", 1);
 var PgStore = ConnectPgSimple(session);
 app.use(helmet());
 app.use(
