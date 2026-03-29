@@ -7,11 +7,18 @@ import {
 
 // ─── Constants ──────────────────────────────────────────
 
-const PAD_LEFT = 100;
-const PAD_RIGHT = 120;
-const PAD_TOP = 60;
-const PAD_BOTTOM = 60;
-const COL_W = 10; // node bar width
+// Responsive padding — tighter on narrow screens
+function getPadding(w: number) {
+  const mobile = w < 600;
+  return {
+    left: mobile ? 20 : 100,
+    right: mobile ? 36 : 120,
+    top: mobile ? 40 : 60,
+    bottom: mobile ? 40 : 60,
+  };
+}
+// No more PAD_ constants — use getPadding(w) everywhere
+const COL_W = 10;
 const BEZIER_CONTROL = 0.42; // 42% of horizontal distance
 
 const LABEL_FONT = "500 12px Inter, system-ui, sans-serif";
@@ -176,6 +183,7 @@ export default function SankeyCanvas({
       const ctx = sankeyCanvasRef.current?.getContext("2d");
       const { w, h } = dimsRef.current;
       if (!ctx || w === 0) return;
+      const pad = getPadding(w);
 
       ctx.clearRect(0, 0, w, h);
       renderLayoutRef.current = currentLayout;
@@ -183,7 +191,7 @@ export default function SankeyCanvas({
       if (currentLayout.nodes.length === 0) return;
 
       const colX = getColumnX(w);
-      const flowH = h - PAD_TOP - PAD_BOTTOM;
+      const flowH = h - pad.top - pad.bottom;
       const activeNode = highlightedNode || hoveredNode;
 
       // Determine connected nodes/links
@@ -214,9 +222,9 @@ export default function SankeyCanvas({
         const x1 = tgtColX;
         const dx = x1 - x0;
 
-        const sy0 = PAD_TOP + link.sourceY * flowH;
+        const sy0 = pad.top + link.sourceY * flowH;
         const sy1 = sy0 + link.sourceHeight * flowH;
-        const ty0 = PAD_TOP + link.targetY * flowH;
+        const ty0 = pad.top + link.targetY * flowH;
         const ty1 = ty0 + link.targetHeight * flowH;
 
         let opacity = RIBBON_OPACITY_IDLE;
@@ -259,7 +267,7 @@ export default function SankeyCanvas({
       for (const node of currentLayout.nodes) {
         if (node.height <= 0) continue;
         const x = colX[node.column];
-        const y = PAD_TOP + node.y * flowH;
+        const y = pad.top + node.y * flowH;
         const h = node.height * flowH;
 
         let nodeOpacity = NODE_OPACITY_DEFAULT;
@@ -295,7 +303,7 @@ export default function SankeyCanvas({
         let lastShownY = -Infinity;
 
         for (const node of colNodes) {
-          const y = PAD_TOP + node.y * flowH;
+          const y = pad.top + node.y * flowH;
           const h = node.height * flowH;
           const labelY = y + h / 2;
 
@@ -390,10 +398,11 @@ export default function SankeyCanvas({
       const ctx = hitCanvasRef.current?.getContext("2d", { willReadFrequently: true });
       const { w, h } = dimsRef.current;
       if (!ctx || w === 0) return;
+      const pad = getPadding(w);
 
       ctx.clearRect(0, 0, w, h);
       const colX = getColumnX(w);
-      const flowH = h - PAD_TOP - PAD_BOTTOM;
+      const flowH = h - pad.top - pad.bottom;
       const indexMap = new Map<number, string>();
 
       let colorIndex = 1;
@@ -401,12 +410,12 @@ export default function SankeyCanvas({
         if (node.height <= 0) continue;
 
         const x = colX[node.column];
-        const y = PAD_TOP + node.y * flowH;
+        const y = pad.top + node.y * flowH;
         const nodeH = node.height * flowH;
 
         let hitX: number, hitW: number;
         if (node.column === 0) {
-          hitX = PAD_LEFT - 8;
+          hitX = pad.left - 8;
           hitW = 120;
         } else if (node.column === 2) {
           hitX = x - 80;
@@ -724,11 +733,12 @@ export default function SankeyCanvas({
 // ─── Helpers ────────────────────────────────────────────
 
 function getColumnX(canvasWidth: number): [number, number, number] {
-  const usable = canvasWidth - PAD_LEFT - PAD_RIGHT - COL_W * 3;
+  const pad = getPadding(canvasWidth);
+  const usable = canvasWidth - pad.left - pad.right - COL_W * 3;
   return [
-    PAD_LEFT,
-    PAD_LEFT + COL_W + usable / 2,
-    canvasWidth - PAD_RIGHT - COL_W,
+    pad.left,
+    pad.left + COL_W + usable / 2,
+    canvasWidth - pad.right - COL_W,
   ];
 }
 

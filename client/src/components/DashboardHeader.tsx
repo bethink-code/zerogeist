@@ -122,10 +122,11 @@ export default function DashboardHeader({
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          padding: "16px 0 12px",
+          padding: "16px 20px 12px",
           pointerEvents: "auto",
           width: "100%",
           maxWidth: 640,
+          boxSizing: "border-box",
           transition: `top ${T_MOVE}, transform ${T_MOVE}`,
         }}
       >
