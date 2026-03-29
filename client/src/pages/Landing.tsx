@@ -29,15 +29,15 @@ export default function Landing() {
             style={{
               backgroundColor: "rgba(255,255,255,0.08)",
               color: "rgba(255,255,255,0.7)",
-              border: "1px solid rgba(255,255,255,0.12)",
+              border: "1px solid rgba(255,255,255,0.06)",
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.14)";
-              e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)";
+              e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
-              e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
+              e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
             }}
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
