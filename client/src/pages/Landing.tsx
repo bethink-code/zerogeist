@@ -10,7 +10,7 @@ export default function Landing() {
             Zerogeist
           </h1>
           <p className="text-sm mt-2 italic" style={{ color: "rgba(255,255,255,0.3)" }}>
-            The world unfiltered. Filtered by you.
+            The spirit of zero. The mood of now.
           </p>
         </div>
 
