@@ -251,6 +251,7 @@ export default function SankeyCanvas({
       }
 
       // ── Draw node bars ──
+      // First pass: draw all bars
       for (const node of currentLayout.nodes) {
         if (node.height <= 0) continue;
         const x = colX[node.column];
@@ -274,49 +275,85 @@ export default function SankeyCanvas({
           roundRect(ctx, x, y, COL_W, h, 3);
           ctx.stroke();
         }
+      }
 
-        // ── Labels ──
-        const labelOpacity = activeNode
-          ? connectedNodes.has(node.id) ? 1 : 0.3
-          : 1;
-        const labelColor = activeNode && !connectedNodes.has(node.id)
-          ? COLOR_LABEL_DIM
-          : COLOR_LABEL;
+      // Second pass: draw labels with collision avoidance
+      const MIN_LABEL_GAP = 14; // minimum pixels between label centers
 
-        ctx.font = LABEL_FONT;
-        ctx.fillStyle = labelColor;
-        ctx.globalAlpha = labelOpacity;
-        ctx.textBaseline = "middle";
+      // Group nodes by column, sorted by y position
+      for (const col of [0, 1, 2] as const) {
+        const colNodes = currentLayout.nodes
+          .filter((n) => n.column === col && n.height > 0)
+          .sort((a, b) => a.y - b.y);
 
-        const labelY = y + h / 2;
+        // Calculate label positions and determine which to show
+        const labels: { node: typeof colNodes[0]; y: number; show: boolean }[] = [];
+        let lastShownY = -Infinity;
 
-        if (node.column === 0) {
-          // Source: label right of bar
-          ctx.textAlign = "left";
-          ctx.fillText(node.label, x + COL_W + 4, labelY);
-        } else if (node.column === 2) {
-          // Emotion: label left of bar, score right of bar
-          ctx.textAlign = "right";
-          ctx.fillText(node.label, x - 4, labelY);
-          ctx.textAlign = "left";
-          ctx.font = SCORE_FONT;
-          ctx.fillStyle = hexToRgba(node.color, labelOpacity);
-          ctx.fillText(String(node.value), x + COL_W + 4, labelY);
-        } else {
-          // Theme: label right of bar
-          ctx.textAlign = "left";
-          const maxLabelW = 120;
-          let label = node.label;
-          if (ctx.measureText(label).width > maxLabelW) {
-            while (label.length > 3 && ctx.measureText(label + "…").width > maxLabelW) {
-              label = label.slice(0, -1);
+        for (const node of colNodes) {
+          const y = PAD_TOP + node.y * flowH;
+          const h = node.height * flowH;
+          const labelY = y + h / 2;
+
+          // Always show if highlighted, otherwise check gap
+          const isHighlighted = activeNode && connectedNodes.has(node.id);
+          const hasGap = labelY - lastShownY >= MIN_LABEL_GAP;
+
+          if (hasGap || isHighlighted || !activeNode) {
+            if (hasGap) {
+              labels.push({ node, y: labelY, show: true });
+              lastShownY = labelY;
+            } else {
+              labels.push({ node, y: labelY, show: !!isHighlighted });
+              if (isHighlighted) lastShownY = labelY;
             }
-            label += "…";
+          } else {
+            labels.push({ node, y: labelY, show: false });
           }
-          ctx.fillText(label, x + COL_W + 4, labelY);
         }
 
-        ctx.globalAlpha = 1;
+        // Draw visible labels
+        for (const { node, y: labelY, show } of labels) {
+          if (!show) continue;
+
+          const x = colX[node.column];
+          const labelOpacity = activeNode
+            ? connectedNodes.has(node.id) ? 1 : 0.3
+            : 1;
+          const labelColor = activeNode && !connectedNodes.has(node.id)
+            ? COLOR_LABEL_DIM
+            : COLOR_LABEL;
+
+          ctx.font = LABEL_FONT;
+          ctx.fillStyle = labelColor;
+          ctx.globalAlpha = labelOpacity;
+          ctx.textBaseline = "middle";
+
+          if (col === 0) {
+            ctx.textAlign = "left";
+            ctx.fillText(node.label, x + COL_W + 4, labelY);
+          } else if (col === 2) {
+            ctx.textAlign = "right";
+            ctx.fillText(node.label, x - 4, labelY);
+            ctx.textAlign = "left";
+            ctx.font = SCORE_FONT;
+            ctx.fillStyle = hexToRgba(node.color, labelOpacity);
+            ctx.fillText(String(node.value), x + COL_W + 4, labelY);
+          } else {
+            ctx.textAlign = "left";
+            const maxLabelW = 120;
+            let label = node.label;
+            if (ctx.measureText(label).width > maxLabelW) {
+              while (label.length > 3 && ctx.measureText(label + "…").width > maxLabelW) {
+                label = label.slice(0, -1);
+              }
+              label += "…";
+            }
+            ctx.fillText(label, x + COL_W + 4, labelY);
+          }
+
+          ctx.globalAlpha = 1;
+        }
       }
     },
     [hoveredNode, highlightedNode]

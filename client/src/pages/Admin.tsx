@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
 import { Link } from "wouter";
 import { useAuth } from "../hooks/useAuth";
+import { ConfirmModal, ProgressModal } from "../components/Modal";
 import UserMenu from "../components/UserMenu";
 
 type Tab = "health" | "prompts" | "sources" | "persons";
@@ -343,6 +344,7 @@ function AddSourceForm({ onDone }: { onDone: () => void }) {
 function HealthTab() {
   const queryClient = useQueryClient();
   const [polling, setPolling] = useState(false);
+  const [showBanish, setShowBanish] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-health"],
@@ -456,8 +458,8 @@ function HealthTab() {
           </div>
         )}
 
-        {/* Source breakdown */}
-        {data?.sourceBreakdown && data.sourceBreakdown.length > 0 && (
+        {/* Source breakdown — only show if there are posts today */}
+        {data?.sourceBreakdown?.some((s: any) => s.postsToday > 0) && (
           <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--surface-border)" }}>
             <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-2">Sources</p>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
@@ -533,11 +535,7 @@ function HealthTab() {
                 Re-synthesise
               </button>
               <button
-                onClick={() => {
-                  if (window.confirm("This will banish today's spirit — all raw posts, summaries, and the snapshot will be deleted.\n\nThe dashboard will fall back to the previous spirit until you summon a new one.\n\nAre you sure?")) {
-                    resetMutation.mutate("all");
-                  }
-                }}
+                onClick={() => setShowBanish(true)}
                 disabled={resetMutation.isPending || polling}
                 className="btn-destructive text-sm ml-auto"
               >
@@ -547,6 +545,31 @@ function HealthTab() {
           )}
         </div>
       </div>
+
+      {/* Banish confirmation modal */}
+      <ConfirmModal
+        isOpen={showBanish}
+        title="Banish today's spirit"
+        message={"This will delete all of today's raw posts, summaries, and the world snapshot.\n\nThe dashboard will fall back to the previous spirit until you summon a new one."}
+        confirmLabel="Banish spirit"
+        cancelLabel="Keep spirit"
+        destructive
+        onConfirm={() => {
+          setShowBanish(false);
+          resetMutation.mutate("all");
+        }}
+        onCancel={() => setShowBanish(false)}
+      />
+
+      {/* Progress modal — shown during cycle runs */}
+      <ProgressModal
+        isOpen={polling && !!progress}
+        title="Summoning spirit..."
+        detail={progress?.detail}
+        steps={progress?.steps}
+        closable={cycleDone}
+        onClose={() => setPolling(false)}
+      />
     </div>
   );
 }
