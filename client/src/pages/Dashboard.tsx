@@ -1,331 +1,216 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
-import { Link } from "wouter";
-import { useQuery as usePostsQuery } from "@tanstack/react-query";
-import GeistField from "../components/GeistField";
-import ProvinceDrilldown from "../components/ProvinceDrilldown";
-import PostCard from "../components/PostCard";
-import UserMenu from "../components/UserMenu";
+import { computeSankeyLayout, type Post } from "../lib/sankeyLayout";
+import SankeyCanvas from "../components/SankeyCanvas";
+import ProvinceNav from "../components/ProvinceNav";
+import PostDrawer from "../components/PostDrawer";
+import DashboardHeader, { type Phase } from "../components/DashboardHeader";
 
-type DrilldownState =
-  | { type: "map" }
-  | { type: "province"; province: any }
-  | { type: "national" };
+type Emotion = "anger" | "hope" | "fear" | "joy" | "grief";
+
+const PROVINCE_PHOTOS: Record<string, string> = {
+  EC: "https://images.unsplash.com/photo-1580060839134-75a5edca2e99?w=1920&h=1080&fit=crop&auto=format&sat=-100",
+  GP: "https://images.unsplash.com/photo-1577948000111-9c970dfe3743?w=1920&h=1080&fit=crop&auto=format&sat=-100",
+  KZN: "https://images.unsplash.com/photo-1552553302-9211bf7f7053?w=1920&h=1080&fit=crop&auto=format&sat=-100",
+  WC: "https://images.unsplash.com/photo-1580060839134-75a5edca2e99?w=1920&h=1080&fit=crop&auto=format&sat=-100",
+  NW: "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?w=1920&h=1080&fit=crop&auto=format&sat=-100",
+  FS: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1920&h=1080&fit=crop&auto=format&sat=-100",
+  MP: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1920&h=1080&fit=crop&auto=format&sat=-100",
+  NC: "https://images.unsplash.com/photo-1509316785289-025f5b846b35?w=1920&h=1080&fit=crop&auto=format&sat=-100",
+  LP: "https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=1920&h=1080&fit=crop&auto=format&sat=-100",
+};
+
+interface Province {
+  id: string;
+  name: string;
+  dominant_emotion: Emotion;
+  emotions: Record<Emotion, number>;
+  intensity: number;
+  consensus: number;
+  geist_reading: string;
+  themes: any[];
+  voices: { text: string; emotion: string; source: string; time?: string }[];
+}
+
+const EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
+const T = `1200ms ${EASE}`;
 
 export default function Dashboard() {
   const { user, isAdmin, logout } = useAuth();
-  const [drilldown, setDrilldown] = useState<DrilldownState>({ type: "map" });
+  const [activeProvince, setActiveProvince] = useState("SA");
+  const [drawerNodeId, setDrawerNodeId] = useState<string | null>(null);
+  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [phase, setPhase] = useState<Phase>("loading");
+  const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Data ──
   const { data: worldData } = useQuery({
     queryKey: ["world-today"],
     queryFn: () => apiRequest("/api/world/today"),
   });
 
-  const { data: questionData } = useQuery({
-    queryKey: ["question-today"],
-    queryFn: () => apiRequest("/api/question/today"),
-  });
-
   const snapshot = worldData?.snapshot;
-  const provinces = snapshot?.provinces || [];
-  const postCounts = worldData?.postCounts || {};
+  const provinces: Province[] = snapshot?.provinces || [];
+  const postCounts: Record<string, number> = worldData?.postCounts || {};
 
-  return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <header className="border-b border-[var(--zg-border)] px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-sm font-bold tracking-[0.2em] uppercase">
-            Zerogeist
-          </h1>
-          <span className="text-xs text-[var(--zg-teal)]">mzansi</span>
-        </div>
-        <UserMenu user={user} isAdmin={isAdmin} onLogout={logout} variant="dark" />
-      </header>
-
-      <main className="max-w-4xl mx-auto px-6 py-12 space-y-16">
-        {/* National Digest */}
-        {snapshot?.fieldState ? (
-          <section className="space-y-4">
-            <h2 className="text-xs tracking-widest uppercase text-[var(--zg-muted)]">
-              Field State
-            </h2>
-            <p className="text-lg leading-relaxed text-gray-300">
-              {worldData.personalised
-                ? worldData.personalDigest || snapshot.fieldState
-                : snapshot.fieldState}
-            </p>
-            <p className="text-xs text-[var(--zg-muted)] mt-2">
-              {snapshot.date}
-              {snapshot.totalPostsAnalysed > 0 && (
-                <span> · {snapshot.totalPostsAnalysed} sources analysed</span>
-              )}
-              {snapshot.analysisCost > 0 && (
-                <span> · ${snapshot.analysisCost.toFixed(4)}</span>
-              )}
-            </p>
-          </section>
-        ) : (
-          <section className="space-y-4">
-            <h2 className="text-xs tracking-widest uppercase text-[var(--zg-muted)]">
-              Field State
-            </h2>
-            <p className="text-[var(--zg-muted)] text-sm">
-              The field is still forming. Check back soon.
-            </p>
-          </section>
-        )}
-
-        {/* Mzansi Weather Map */}
-        <section className="space-y-4">
-          <h2 className="text-xs tracking-widest uppercase text-[var(--zg-muted)]">
-            Mzansi
-          </h2>
-
-          {provinces.length > 0 ? (
-            <div className="space-y-8">
-              {/* The Geist field — shrinks when drilled in */}
-              <div
-                className="transition-all duration-500 overflow-hidden"
-                style={{
-                  height: drilldown.type === "map" ? "auto" : "120px",
-                  opacity: drilldown.type === "map" ? 1 : 0.4,
-                }}
-              >
-                <GeistField
-                  provinces={provinces}
-                  nationalEmotion={snapshot.nationalEmotion}
-                  nationalIntensity={snapshot.nationalIntensity}
-                  nationalConsensus={snapshot.nationalConsensus}
-                  postCounts={postCounts}
-                  focusedProvince={drilldown.type === "province" ? drilldown.province.id : null}
-                  onSelectProvince={(p) => {
-                    if ((postCounts[p.id] || 0) > 0) {
-                      setDrilldown({ type: "province", province: p });
-                    }
-                  }}
-                  onSelectNational={() => setDrilldown({ type: "national" })}
-                />
-              </div>
-
-              {/* Drill-down content appears below the field */}
-              {drilldown.type === "province" && (
-                <ProvinceDrilldown
-                  province={drilldown.province}
-                  fieldState={snapshot.fieldState || ""}
-                  onBack={() => setDrilldown({ type: "map" })}
-                />
-              )}
-
-              {drilldown.type === "national" && (
-                <NationalDrilldown
-                  fieldState={snapshot.fieldState || ""}
-                  onBack={() => setDrilldown({ type: "map" })}
-                />
-              )}
-            </div>
-          ) : (
-            <div className="bg-[var(--zg-surface)] border border-[var(--zg-border)] rounded-xl p-12 text-center">
-              <p className="text-[var(--zg-muted)] text-sm">
-                No signal yet. The geist is silent.
-              </p>
-            </div>
-          )}
-        </section>
-
-        {/* Daily Question */}
-        <section className="space-y-6">
-          <h2 className="text-xs tracking-widest uppercase text-[var(--zg-muted)]">
-            Your Question
-          </h2>
-          {questionData ? (
-            <DailyQuestion question={questionData} />
-          ) : (
-            <div className="bg-[var(--zg-surface)] border border-[var(--zg-border)] rounded-xl p-12 text-center">
-              <p className="text-[var(--zg-muted)] text-sm">
-                Your first question will appear after the daily cycle runs.
-              </p>
-            </div>
-          )}
-        </section>
-      </main>
-    </div>
-  );
-}
-
-function NationalDrilldown({ fieldState, onBack }: { fieldState: string; onBack: () => void }) {
-  const { data: posts = [], isLoading } = usePostsQuery({
-    queryKey: ["national-posts"],
-    queryFn: () => apiRequest("/api/posts/today?province=national"),
+  const provinceQueryKey = activeProvince === "SA" ? "national" : activeProvince;
+  const { data: posts = [] } = useQuery<Post[]>({
+    queryKey: ["province-posts", provinceQueryKey],
+    queryFn: () => apiRequest(`/api/posts/today?province=${provinceQueryKey}`),
+    enabled: !!snapshot,
   });
 
-  // Build themes from post summaries
-  const themes = (() => {
-    const counts = new Map<string, { posts: any[]; emotion: string }>();
-    for (const p of posts) {
-      for (const tag of (p.themes as string[] || [])) {
-        const key = tag.toLowerCase();
-        if (!counts.has(key)) counts.set(key, { posts: [], emotion: p.emotion });
-        counts.get(key)!.posts.push(p);
+  const sankeyLayout = useMemo(() => computeSankeyLayout(posts), [posts]);
+
+  const currentVoice = useMemo(() => {
+    if (activeProvince === "SA") {
+      for (const p of provinces) {
+        if (p.voices?.length) return p.voices[0];
       }
+      return null;
     }
-    return [...counts.entries()]
-      .map(([name, { posts: tp, emotion }]) => ({ name, emotion, posts: tp, count: tp.length }))
-      .filter((t) => t.count >= 2) // only show themes with 2+ posts
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 15);
-  })();
+    const prov = provinces.find((p) => p.id === activeProvince);
+    if (!prov?.voices?.length) return null;
+    return prov.voices.find((v) => v.emotion === prov.dominant_emotion) || prov.voices[0];
+  }, [activeProvince, provinces]);
 
-  // Posts not in any displayed theme
-  const themedPostIds = new Set(themes.flatMap((t) => t.posts.map((p: any) => p.id)));
-  const unthemed = posts.filter((p: any) => !themedPostIds.has(p.id));
+  const activeProvinceName = useMemo(() => {
+    if (activeProvince === "SA") return "South Africa";
+    return provinces.find((p) => p.id === activeProvince)?.name || activeProvince;
+  }, [activeProvince, provinces]);
 
-  const [expanded, setExpanded] = useState<string | null>(null);
+  // ── Phase state machine ──
+  useEffect(() => {
+    if (phase === "loading" && !!snapshot) setPhase("splash");
+  }, [phase, snapshot]);
 
-  return (
-    <div className="space-y-8">
-      <div className="flex items-center gap-4">
-        <button onClick={onBack} className="text-[var(--zg-muted)] hover:text-white text-sm transition-colors">
-          ← Back to map
-        </button>
-        <h2 className="text-lg font-medium">National</h2>
-        <span className="text-xs text-[var(--zg-muted)]">Posts not tied to a specific province</span>
-      </div>
+  useEffect(() => {
+    if (phase === "splash") {
+      const t = setTimeout(() => setPhase("settling"), 3500);
+      return () => clearTimeout(t);
+    }
+  }, [phase]);
 
-      <p className="text-xs text-[var(--zg-muted)] italic">{fieldState}</p>
-      <p className="text-xs text-[var(--zg-muted)]">
-        {posts.length} national posts
-      </p>
+  useEffect(() => {
+    if (phase === "settling") {
+      const t = setTimeout(() => setPhase("ready"), 1400);
+      return () => clearTimeout(t);
+    }
+  }, [phase]);
 
-      {isLoading ? (
-        <p className="text-[var(--zg-muted)] text-sm animate-pulse">Loading...</p>
-      ) : (
-        <div className="space-y-2">
-          {themes.map((theme) => {
-            const isExpanded = expanded === theme.name;
-            const sorted = [...theme.posts].sort((a: any, b: any) => {
-              const engA = (a.engagement?.score || 0) + (a.engagement?.likes || 0) + (a.engagement?.retweets || 0) * 2;
-              const engB = (b.engagement?.score || 0) + (b.engagement?.likes || 0) + (b.engagement?.retweets || 0) * 2;
-              return engB - engA;
-            });
-
-            return (
-              <div key={theme.name}>
-                <button
-                  onClick={() => setExpanded(isExpanded ? null : theme.name)}
-                  className="w-full text-left bg-[var(--zg-surface)] border border-[var(--zg-border)] rounded-lg p-4 hover:border-[var(--zg-teal)]/30 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm">{isExpanded ? "▼" : "▶"}</span>
-                      <span className="text-sm font-medium capitalize">{theme.name}</span>
-                    </div>
-                    <span className="text-xs text-[var(--zg-muted)]">{theme.count} posts</span>
-                  </div>
-                </button>
-                {isExpanded && (
-                  <div className="mt-2 ml-4 space-y-2">
-                    {sorted.map((post: any) => (
-                      <PostCard key={post.id} post={post} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Unthemed posts */}
-          {unthemed.length > 0 && (() => {
-            const isExpanded = expanded === "__other__";
-            return (
-              <div>
-                <button
-                  onClick={() => setExpanded(isExpanded ? null : "__other__")}
-                  className="w-full text-left bg-[var(--zg-surface)] border border-[var(--zg-border)] rounded-lg p-4 hover:border-[var(--zg-teal)]/30 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm">{isExpanded ? "▼" : "▶"}</span>
-                      <span className="text-sm font-medium text-[var(--zg-muted)]">Other posts</span>
-                    </div>
-                    <span className="text-xs text-[var(--zg-muted)]">{unthemed.length} posts</span>
-                  </div>
-                </button>
-                {isExpanded && (
-                  <div className="mt-2 ml-4 space-y-2">
-                    {unthemed.map((post: any) => (
-                      <PostCard key={post.id} post={post} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          <p className="text-xs text-[var(--zg-muted)] text-center pt-2">
-            {posts.length} total posts · {themes.reduce((sum, t) => sum + t.count, 0)} in themes · {unthemed.length} other
-          </p>
-        </div>
-      )}
-    </div>
+  // ── Province switch ──
+  const handleProvinceSelect = useCallback(
+    (provinceId: string) => {
+      if (provinceId === activeProvince) return;
+      setDrawerNodeId(null);
+      setHoveredNode(null);
+      setIsTransitioning(true);
+      setActiveProvince(provinceId);
+      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = setTimeout(() => setIsTransitioning(false), 1200);
+    },
+    [activeProvince]
   );
-}
 
-function DailyQuestion({ question }: { question: any }) {
-  if (question.answeredAt) {
-    return (
-      <div className="space-y-4">
-        <p className="text-xl leading-relaxed">{question.text}</p>
-        <div className="bg-[var(--zg-surface)] border border-[var(--zg-border)] rounded-lg p-6">
-          <p className="text-sm text-[var(--zg-muted)] mb-2">Your answer</p>
-          <p className="text-gray-300">{question.answerText}</p>
-        </div>
-        <p className="text-xs text-[var(--zg-muted)]">
-          Received quietly. Your proxy is updating.
-        </p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    return () => { if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current); };
+  }, []);
+
+  const handleNodeClick = useCallback(
+    (nodeId: string) => setDrawerNodeId((prev) => prev === nodeId ? null : nodeId),
+    []
+  );
+
+  const drawerPosts = useMemo(() => {
+    if (!drawerNodeId) return [];
+    return sankeyLayout.postsByNode.get(drawerNodeId) || [];
+  }, [drawerNodeId, sankeyLayout]);
+
+  const drawerNode = useMemo(() => {
+    if (!drawerNodeId) return null;
+    return sankeyLayout.nodes.find((n) => n.id === drawerNodeId) || null;
+  }, [drawerNodeId, sankeyLayout]);
+
+  const drawerLabel = drawerNode?.label || "";
+  const drawerNodeColor = drawerNode?.color || "#8A7860";
+
+  const big = phase === "loading" || phase === "splash";
+  const showDashboard = phase === "settling" || phase === "ready";
 
   return (
-    <div className="space-y-6">
-      <p className="text-2xl leading-relaxed font-light">{question.text}</p>
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          const form = e.target as HTMLFormElement;
-          const textarea = form.querySelector("textarea") as HTMLTextAreaElement;
-          const answer = textarea.value.trim();
-          if (!answer) return;
+    <div
+      style={{
+        height: "100vh",
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        backgroundColor: big ? "#0A0806" : "#F5F1E8",
+        overflow: "hidden",
+        transition: `background-color ${T}`,
+      }}
+    >
+      {/* ═══ THE HERO — one component, all phases ═══ */}
+      <DashboardHeader
+        phase={phase}
+        provinceName={activeProvinceName}
+        voice={currentVoice}
+        isProvinceTransitioning={isTransitioning}
+        user={user}
+        isAdmin={isAdmin}
+        onLogout={logout}
+      />
 
-          await apiRequest("/api/question/answer", {
-            method: "POST",
-            body: JSON.stringify({
-              questionId: question.id,
-              answerText: answer,
-            }),
-          });
-          window.location.reload();
+      {/* Spacer to push content below the fixed header */}
+      <div style={{ height: showDashboard ? 160 : 0, flexShrink: 0, transition: `height ${T}` }} />
+
+      {/* ═══ DASHBOARD ═══ */}
+      <main
+        style={{
+          flex: 1,
+          position: "relative",
+          overflow: "hidden",
+          marginBottom: 52,
+          opacity: showDashboard ? 1 : 0,
+          transition: `opacity 800ms ease 400ms`,
+          pointerEvents: showDashboard ? "auto" : "none",
         }}
       >
-        <textarea
-          className="w-full bg-[var(--zg-surface)] border border-[var(--zg-border)] rounded-lg p-6 text-white resize-none focus:outline-none focus:border-[var(--zg-teal)] transition-colors min-h-[160px]"
-          placeholder="Take your time..."
+        <SankeyCanvas
+          layout={sankeyLayout}
+          onNodeClick={handleNodeClick}
+          onNodeHover={setHoveredNode}
+          hoveredNode={hoveredNode}
+          highlightedNode={drawerNodeId}
+          provincePhoto={PROVINCE_PHOTOS[activeProvince] || null}
         />
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-xs text-[var(--zg-muted)]">
-            You can return to this today if you need time to think.
-          </p>
-          <button
-            type="submit"
-            className="px-6 py-2 bg-[var(--zg-teal)] text-[var(--zg-dark)] rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
-          >
-            Done
-          </button>
-        </div>
-      </form>
+
+        <PostDrawer
+          isOpen={!!drawerNodeId}
+          nodeId={drawerNodeId}
+          nodeLabel={drawerLabel}
+          nodeColor={drawerNodeColor}
+          posts={drawerPosts}
+          onClose={() => setDrawerNodeId(null)}
+        />
+      </main>
+
+      <nav
+        style={{
+          opacity: showDashboard ? 1 : 0,
+          transform: showDashboard ? "translateY(0)" : "translateY(100%)",
+          transition: `opacity 600ms ease 500ms, transform 600ms ${EASE} 500ms`,
+        }}
+      >
+        <ProvinceNav
+          provinces={provinces}
+          activeProvinceId={activeProvince}
+          postCounts={postCounts}
+          onSelect={handleProvinceSelect}
+        />
+      </nav>
     </div>
   );
 }

@@ -518,6 +518,8 @@ export async function getPostsForProvince(date: string, provinceId: string) {
       intensity: postSummary.intensity,
       signalStrength: postSummary.signalStrength,
       voiceWorthy: postSummary.voiceWorthy,
+      voiceText: postSummary.voiceText,
+      voiceAttribution: postSummary.voiceAttribution,
     })
     .from(rawPost)
     .innerJoin(postSummary, eq(rawPost.id, postSummary.rawPostId))

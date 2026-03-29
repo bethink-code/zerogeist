@@ -540,7 +540,9 @@ async function getPostsForProvince(date2, provinceId) {
     emotion: postSummary.emotion,
     intensity: postSummary.intensity,
     signalStrength: postSummary.signalStrength,
-    voiceWorthy: postSummary.voiceWorthy
+    voiceWorthy: postSummary.voiceWorthy,
+    voiceText: postSummary.voiceText,
+    voiceAttribution: postSummary.voiceAttribution
   }).from(rawPost).innerJoin(postSummary, eq2(rawPost.id, postSummary.rawPostId)).where(and(eq2(postSummary.date, date2), eq2(postSummary.provinceId, provinceId))).orderBy(desc(postSummary.signalStrength));
 }
 async function clearTodaysCycle() {

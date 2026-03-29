@@ -9,28 +9,20 @@ import NotFound from "./pages/not-found";
 function App() {
   const { user, isLoading, isAuthenticated, isAdmin } = useAuth();
 
-  if (isLoading) {
+  // While auth is loading OR user is authenticated → show Dashboard
+  // Dashboard handles its own loading state via the DashboardHeader phases
+  if (isLoading || isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-[var(--zg-muted)] text-sm tracking-widest uppercase">
-          Zerogeist
-        </div>
-      </div>
+      <Switch>
+        <Route path="/" component={Dashboard} />
+        <Route path="/settings" component={Settings} />
+        {isAdmin && <Route path="/admin" component={Admin} />}
+        <Route component={Dashboard} />
+      </Switch>
     );
   }
 
-  if (!isAuthenticated) {
-    return <Landing />;
-  }
-
-  return (
-    <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/settings" component={Settings} />
-      {isAdmin && <Route path="/admin" component={Admin} />}
-      <Route component={NotFound} />
-    </Switch>
-  );
+  return <Landing />;
 }
 
 export default App;
