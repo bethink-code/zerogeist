@@ -356,9 +356,12 @@ function HealthTab() {
     refetchInterval: polling ? 2000 : false,
   });
 
-  // Stop polling once cycle completes or fails
-  if (polling && data?.todaysCycle?.status && data.todaysCycle.status !== "in_progress") {
-    setPolling(false);
+  // Stop polling once cycle completes or fails — but only if it was in_progress first
+  const cycleStatus = data?.todaysCycle?.status;
+  const cycleDone = cycleStatus === "completed" || cycleStatus === "failed";
+  if (polling && cycleDone) {
+    // Small delay to let final health data settle
+    setTimeout(() => setPolling(false), 1000);
   }
 
   const triggerMutation = useMutation({
@@ -373,10 +376,13 @@ function HealthTab() {
   const resetMutation = useMutation({
     mutationFn: async (from: string = "all") => {
       await apiRequest(`/api/admin/cycle/today?from=${from}`, { method: "DELETE" });
-      await apiRequest("/api/admin/cycle/trigger", { method: "POST" });
+      // Only auto-trigger for re-summarise and re-synthesise, not full reset
+      if (from !== "all") {
+        await apiRequest(`/api/admin/cycle/trigger?mode=${from === "summarise" ? "resummarize" : "resynthesize"}`, { method: "POST" });
+      }
     },
-    onSuccess: () => {
-      setPolling(true);
+    onSuccess: (_, from) => {
+      if (from !== "all") setPolling(true);
       queryClient.invalidateQueries({ queryKey: ["admin-health"] });
     },
   });
@@ -398,14 +404,6 @@ function HealthTab() {
         {data?.todaysCycle && (
           <>
             <button
-              onClick={() => resetMutation.mutate("synthesise")}
-              disabled={resetMutation.isPending || polling}
-              className="btn-secondary text-sm"
-              title="Keep raw posts + summaries, re-synthesise only"
-            >
-              Re-synthesise
-            </button>
-            <button
               onClick={() => resetMutation.mutate("summarise")}
               disabled={resetMutation.isPending || polling}
               className="btn-secondary text-sm"
@@ -414,12 +412,24 @@ function HealthTab() {
               Re-summarise
             </button>
             <button
-              onClick={() => resetMutation.mutate("all")}
+              onClick={() => resetMutation.mutate("synthesise")}
+              disabled={resetMutation.isPending || polling}
+              className="btn-secondary text-sm"
+              title="Keep raw posts + summaries, re-synthesise only"
+            >
+              Re-synthesise
+            </button>
+            <button
+              onClick={() => {
+                if (window.confirm("This will delete ALL of today's data — raw posts, summaries, snapshot, and cycle log. You'll need to re-trigger to rebuild from scratch.\n\nAre you sure?")) {
+                  resetMutation.mutate("all");
+                }
+              }}
               disabled={resetMutation.isPending || polling}
               className="btn-destructive text-sm ml-auto"
-              title="Delete everything including raw posts, re-fetch all"
+              title="Deletes today's raw posts, summaries, snapshot, and cycle log. You'll need to re-trigger to rebuild."
             >
-              Full reset
+              Reset today
             </button>
           </>
         )}
@@ -502,6 +512,31 @@ function HealthTab() {
           </div>
           {data.todaysCycle.failedAtStep && (
             <p className="text-xs text-[var(--fire-800)]">Failed at: {data.todaysCycle.failedAtStep}</p>
+          )}
+
+          {/* Source breakdown — inside cycle card */}
+          {data?.sourceBreakdown && data.sourceBreakdown.length > 0 && (
+            <div className="pt-3 mt-3" style={{ borderTop: "1px solid var(--surface-border)" }}>
+              <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-2">Sources</p>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                {data.sourceBreakdown.map((s: any) => (
+                  <div key={s.type} className="flex items-center gap-2 text-xs">
+                    <span className="w-3 text-center">
+                      {s.postsToday > 0
+                        ? <span className="text-[var(--succulent-600)]">✓</span>
+                        : s.lastRunStatus === "failed"
+                        ? <span className="text-[var(--fire-600)]">✗</span>
+                        : <span className="text-[var(--text-placeholder)]">○</span>
+                      }
+                    </span>
+                    <span className="font-medium text-[var(--text-heading)]">{s.type}</span>
+                    <span className="text-[var(--text-muted)]">
+                      {s.postsToday > 0 ? s.postsToday : s.lastRunStatus === "failed" ? "err" : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       )}

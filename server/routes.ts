@@ -45,9 +45,12 @@ router.get("/api/world/today", isAuthenticated, async (req, res) => {
     const user = req.user as any;
     const pw = await storage.getPersonWorldToday(user.id);
     if (!pw) {
-      // Fallback to raw snapshot
-      const snapshot = await storage.getLatestSnapshot();
-      return res.json({ snapshot, personalised: false });
+      // Try today's snapshot first, then fall back to latest
+      const todaysSnapshot = await storage.getTodaysSnapshot();
+      const snapshot = todaysSnapshot || await storage.getLatestSnapshot();
+      if (!snapshot) return res.json({ snapshot: null, personalised: false });
+      const postCounts = await storage.getPostCountsByProvince(snapshot.date);
+      return res.json({ snapshot, postCounts, personalised: false });
     }
     // Include the underlying snapshot + post counts for the dashboard
     const snapshot = await storage.getSnapshotById(pw.snapshotId);
@@ -370,12 +373,39 @@ router.patch("/api/admin/sources/:id", isAdmin, async (req, res) => {
 // GET /api/admin/health
 router.get("/api/admin/health", isAdmin, async (_req, res) => {
   try {
-    const [personCount, sourceCount, cycleLog, snapshot] = await Promise.all([
+    const [personCount, sourceCount, cycleLog, snapshot, sources, todaysRawPosts] = await Promise.all([
       storage.getActivePersonCount(),
       storage.getActiveSourceCount(),
       storage.getTodaysCycleLog(),
       storage.getTodaysSnapshot(),
+      storage.getActiveSources(),
+      storage.getRawPostsByDate(new Date().toISOString().split("T")[0]),
     ]);
+
+    // Per-source-type breakdown (grouped, not per source row)
+    const postsByType = new Map<string, number>();
+    for (const p of todaysRawPosts) {
+      const t = (p as any).sourceType;
+      postsByType.set(t, (postsByType.get(t) || 0) + 1);
+    }
+
+    // Group source records by type, take latest run info
+    const sourceByType = new Map<string, { lastRun: any; lastRunStatus: any }>();
+    for (const s of sources) {
+      const existing = sourceByType.get(s.type);
+      if (!existing || (s.lastRun && (!existing.lastRun || s.lastRun > existing.lastRun))) {
+        sourceByType.set(s.type, { lastRun: s.lastRun, lastRunStatus: s.lastRunStatus });
+      }
+    }
+
+    // All known source types
+    const allTypes = ["reddit", "twitter", "bluesky", "reliefweb", "pmg"];
+    const sourceBreakdown = allTypes.map((type) => ({
+      type,
+      postsToday: postsByType.get(type) || 0,
+      lastRunStatus: sourceByType.get(type)?.lastRunStatus || null,
+      lastRun: sourceByType.get(type)?.lastRun || null,
+    }));
 
     res.json({
       activePersons: personCount,
@@ -384,26 +414,44 @@ router.get("/api/admin/health", isAdmin, async (_req, res) => {
       todaysSnapshot: snapshot
         ? { generated: true, date: snapshot.date, analysisCost: snapshot.analysisCost, totalPosts: snapshot.totalPostsAnalysed }
         : { generated: false },
+      sourceBreakdown,
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch health" });
   }
 });
 
-// POST /api/admin/cycle/trigger
+// POST /api/admin/cycle/trigger?mode=full|fetch-only|resummarize|resynthesize
+// full: fetch new/missing sources → summarise → synthesise (default)
+// fetch-only: fetch new/missing sources only, no AI processing
+// resummarize: skip fetch, re-run Haiku + Sonnet on existing posts
+// resynthesize: skip fetch + summarise, re-run Sonnet only
 router.post("/api/admin/cycle/trigger", isAdmin, async (req, res) => {
   try {
     const user = req.user as any;
+    const mode = (req.query.mode as string) || "full";
+    const validModes = ["full", "fetch-only", "resummarize", "resynthesize"];
+
+    if (!validModes.includes(mode)) {
+      return res.status(400).json({ error: `Invalid mode. Use: ${validModes.join(", ")}` });
+    }
+
     audit({
-      action: "admin.cycle.triggered",
+      action: `admin.cycle.triggered.${mode}`,
       userId: user.id,
     });
 
-    // Trigger the daily cycle asynchronously
     const { runDailyCycle } = await import("./dailyCycle.js");
-    runDailyCycle().catch((err) => console.error("[cycle] Trigger failed:", err));
+    runDailyCycle(mode as any).catch((err) => console.error("[cycle] Trigger failed:", err));
 
-    res.json({ message: "Daily cycle triggered. Check platform health for status." });
+    const messages: Record<string, string> = {
+      "full": "Full daily cycle triggered. New/missing sources will be fetched, then summarise + synthesise.",
+      "fetch-only": "Fetch-only triggered. New/missing sources will be fetched and stored. No summarisation.",
+      "resummarize": "Re-summarise triggered. Existing posts will be re-processed by Haiku + Sonnet.",
+      "resynthesize": "Re-synthesise triggered. Existing summaries will be re-aggregated by Sonnet.",
+    };
+
+    res.json({ message: messages[mode], mode });
   } catch (err) {
     res.status(500).json({ error: "Failed to trigger cycle" });
   }

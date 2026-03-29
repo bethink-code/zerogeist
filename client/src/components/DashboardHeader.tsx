@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { Link } from "wouter";
 import { EMOTION_COLORS } from "../lib/sankeyLayout";
 
 // ─── Types ──────────────────────────────────────────────
@@ -50,12 +49,16 @@ export default function DashboardHeader({
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!menuOpen) return;
     const close = () => setMenuOpen(false);
     const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) close();
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target)) return;
+      if (dropdownRef.current?.contains(target)) return;
+      close();
     };
     const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
     document.addEventListener("mousedown", handleClick);
@@ -327,13 +330,8 @@ export default function DashboardHeader({
 
       {/* ═══ User menu dropdown — rendered outside all transforms ═══ */}
       {menuOpen && settled && (
-        <>
-          {/* Backdrop to close */}
           <div
-            onClick={() => setMenuOpen(false)}
-            style={{ position: "fixed", inset: 0, zIndex: 99 }}
-          />
-          <div
+            ref={dropdownRef}
             style={{
               position: "fixed",
               top: 48,
@@ -344,8 +342,7 @@ export default function DashboardHeader({
               backgroundColor: "#FFFFFF",
               border: "1px solid #DDD5C0",
               boxShadow: "0 4px 16px rgba(44,36,24,0.1)",
-              zIndex: 100,
-              overflow: "hidden",
+              zIndex: 9999,
             }}
           >
             <div style={{ padding: "10px 14px", borderBottom: "1px solid #EDE8D8" }}>
@@ -368,7 +365,6 @@ export default function DashboardHeader({
               </button>
             </div>
           </div>
-        </>
       )}
     </>
   );
@@ -378,13 +374,19 @@ export default function DashboardHeader({
 
 function MenuLink({ href, onClick, children }: { href: string; onClick: () => void; children: React.ReactNode }) {
   return (
-    <Link
-      href={href} onClick={onClick}
-      style={{ display: "block", padding: "8px 14px", fontSize: 13, color: "#3A3020", textDecoration: "none" }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#FAF7F0"; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+    <a
+      href={href}
+      onClick={(e) => {
+        e.preventDefault();
+        onClick();
+        // Navigate after menu closes
+        setTimeout(() => { window.location.href = href; }, 0);
+      }}
+      style={{ display: "block", padding: "8px 14px", fontSize: 13, color: "#3A3020", textDecoration: "none", cursor: "pointer" }}
+      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#FAF7F0"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
     >
       {children}
-    </Link>
+    </a>
   );
 }

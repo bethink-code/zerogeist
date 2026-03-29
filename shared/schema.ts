@@ -35,6 +35,7 @@ export const sourceTypeEnum = pgEnum("source_type", [
   "telegram",
   "rss",
   "twitter",
+  "bluesky",
   "other",
 ]);
 

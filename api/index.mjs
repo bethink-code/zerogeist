@@ -70,6 +70,7 @@ var init_schema = __esm({
       "telegram",
       "rss",
       "twitter",
+      "bluesky",
       "other"
     ]);
     sourceRegionEnum = pgEnum("source_region", [
@@ -552,6 +553,8 @@ async function clearTodaysCycle() {
     await db.delete(personWorld).where(eq2(personWorld.snapshotId, snapshot.id));
     await db.delete(worldSnapshot).where(eq2(worldSnapshot.id, snapshot.id));
   }
+  await db.delete(postSummary).where(eq2(postSummary.date, today));
+  await db.delete(rawPost).where(eq2(rawPost.date, today));
   await db.delete(dailyCycleLog).where(eq2(dailyCycleLog.date, today));
 }
 async function clearFromSummarise() {
@@ -572,6 +575,18 @@ async function clearFromSynthesise() {
     await db.delete(worldSnapshot).where(eq2(worldSnapshot.id, snapshot.id));
   }
   await db.delete(dailyCycleLog).where(eq2(dailyCycleLog.date, today));
+}
+async function clearTodaysSummaries() {
+  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  await db.delete(postSummary).where(eq2(postSummary.date, today));
+}
+async function clearTodaysSnapshot() {
+  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  const [snapshot] = await db.select().from(worldSnapshot).where(eq2(worldSnapshot.date, today));
+  if (snapshot) {
+    await db.delete(personWorld).where(eq2(personWorld.snapshotId, snapshot.id));
+    await db.delete(worldSnapshot).where(eq2(worldSnapshot.id, snapshot.id));
+  }
 }
 var PROVINCE_HINTS;
 var init_storage = __esm({
@@ -1017,6 +1032,142 @@ var init_apify = __esm({
   }
 });
 
+// server/sources/bluesky.ts
+function getTodayRange() {
+  const now = /* @__PURE__ */ new Date();
+  const since = new Date(now);
+  since.setHours(0, 0, 0, 0);
+  const until = new Date(since);
+  until.setDate(until.getDate() + 1);
+  return {
+    since: since.toISOString(),
+    until: until.toISOString()
+  };
+}
+function postUrl(uri, handle) {
+  const rkey = uri.split("/").pop();
+  return `https://bsky.app/profile/${handle}/post/${rkey}`;
+}
+async function searchPosts(query, province, since, until) {
+  const posts = [];
+  let cursor;
+  let pages = 0;
+  const MAX_PAGES = 3;
+  while (pages < MAX_PAGES) {
+    const params = new URLSearchParams({
+      q: query,
+      sort: "latest",
+      since,
+      until,
+      limit: "100"
+    });
+    if (cursor) params.set("cursor", cursor);
+    const url = `${API_BASE}/app.bsky.feed.searchPosts?${params}`;
+    try {
+      const res = await fetch(url, {
+        headers: { "User-Agent": "zerogeist/1.0 (mzansi.zerogeist.me)" }
+      });
+      if (!res.ok) {
+        if (res.status === 429) {
+          console.log(`[bluesky] Rate limited on "${query}", stopping pagination`);
+          break;
+        }
+        console.error(`[bluesky] Search failed for "${query}": ${res.status}`);
+        break;
+      }
+      const data = await res.json();
+      const results = data.posts || [];
+      for (const post of results) {
+        const record = post.record || {};
+        posts.push({
+          text: record.text || "",
+          author: post.author?.handle || "unknown",
+          displayName: post.author?.displayName || null,
+          likes: post.likeCount || 0,
+          reposts: post.repostCount || 0,
+          replies: post.replyCount || 0,
+          quotes: post.quoteCount || 0,
+          createdAt: new Date(record.createdAt || post.indexedAt || Date.now()),
+          url: postUrl(post.uri, post.author?.handle || "unknown"),
+          source: "bluesky",
+          langs: record.langs || [],
+          provinceTag: province
+        });
+      }
+      cursor = data.cursor;
+      pages++;
+      if (!cursor || results.length < 100) break;
+      await new Promise((r) => setTimeout(r, 200));
+    } catch (err) {
+      console.error(`[bluesky] Error searching "${query}": ${err.message}`);
+      break;
+    }
+  }
+  return posts;
+}
+async function fetchBluesky() {
+  const allPosts = [];
+  const errors = [];
+  const seenUrls = /* @__PURE__ */ new Set();
+  const { since, until } = getTodayRange();
+  console.log(`[bluesky] Searching ${SEARCHES.length} queries for ${since.split("T")[0]}`);
+  for (const { query, province } of SEARCHES) {
+    try {
+      const posts = await searchPosts(query, province, since, until);
+      for (const p of posts) {
+        if (!seenUrls.has(p.url) && p.text.length > 10) {
+          seenUrls.add(p.url);
+          allPosts.push(p);
+        }
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    } catch (err) {
+      errors.push(`"${query}": ${err.message}`);
+    }
+  }
+  const provCounts = /* @__PURE__ */ new Map();
+  for (const p of allPosts) {
+    const key = p.provinceTag || "national";
+    provCounts.set(key, (provCounts.get(key) || 0) + 1);
+  }
+  const distStr = [...provCounts.entries()].map(([k, v]) => `${k}:${v}`).join(" ");
+  console.log(`[bluesky] Got ${allPosts.length} posts (${distStr})`);
+  return {
+    posts: allPosts,
+    error: errors.length > 0 ? errors.join("; ") : null
+  };
+}
+var API_BASE, SEARCHES;
+var init_bluesky = __esm({
+  "server/sources/bluesky.ts"() {
+    "use strict";
+    API_BASE = "https://api.bsky.app/xrpc";
+    SEARCHES = [
+      // National
+      { query: "South Africa", province: null },
+      { query: "Mzansi", province: null },
+      // Gauteng
+      { query: "Johannesburg OR Joburg OR Pretoria OR Tshwane", province: "GP" },
+      // Western Cape
+      { query: "Cape Town OR Stellenbosch OR Kaapstad", province: "WC" },
+      // KwaZulu-Natal
+      { query: "Durban OR eThekwini OR Pietermaritzburg", province: "KZN" },
+      // Eastern Cape
+      { query: "Gqeberha OR East London OR Mthatha", province: "EC" },
+      // Free State
+      { query: "Bloemfontein OR Mangaung", province: "FS" },
+      // North West
+      { query: "Rustenburg OR Mahikeng", province: "NW" },
+      // Northern Cape
+      { query: "Kimberley OR Upington", province: "NC" },
+      // Mpumalanga
+      { query: "Mbombela OR Nelspruit OR eMalahleni", province: "MP" },
+      // Limpopo
+      { query: "Polokwane OR Limpopo OR Tzaneen", province: "LP" }
+    ];
+  }
+});
+
 // server/sources/summarise.ts
 import Anthropic from "@anthropic-ai/sdk";
 function buildBatches(posts) {
@@ -1043,6 +1194,9 @@ function formatAttribution(post) {
   }
   if (post.sourceType === "twitter") {
     return `x/@${post.author || "unknown"}`;
+  }
+  if (post.sourceType === "bluesky") {
+    return `bsky/@${post.author || "unknown"}`;
   }
   if (post.sourceType === "reliefweb") return "ReliefWeb";
   if (post.sourceType === "pmg") return "PMG";
@@ -1399,24 +1553,45 @@ function failStep(stepName, detail) {
     }
   }
 }
-async function runDailyCycle() {
+async function runDailyCycle(mode = "full") {
   if (cycleRunning) {
     console.log("[cycle] Already running, skipping.");
     return;
   }
   cycleRunning = true;
   const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-  console.log(`[cycle] Starting daily cycle for ${today}`);
+  console.log(`[cycle] Starting daily cycle for ${today} (mode: ${mode})`);
   const existing = await getTodaysCycleLog();
-  if (existing && existing.status === "completed") {
-    console.log("[cycle] Already completed today, skipping.");
+  const existingRawPosts = await getRawPostsByDate(today);
+  const existingSourceTypes = new Set(existingRawPosts.map((p) => p.sourceType));
+  const allSourceTypes = ["reddit", "twitter", "bluesky", "reliefweb", "pmg"];
+  const missingSourceTypes = allSourceTypes.filter((s) => !existingSourceTypes.has(s));
+  if (mode === "full" && existing && existing.status === "completed" && missingSourceTypes.length === 0) {
+    console.log("[cycle] Already completed today, all sources present, skipping.");
     cycleRunning = false;
     return;
   }
-  const existingRawPosts = await getRawPostsByDate(today);
-  const resumeFromStore = existingRawPosts.length > 0;
-  if (resumeFromStore) {
-    console.log(`[cycle] Found ${existingRawPosts.length} stored raw posts for today \u2014 skipping fetch, resuming from summarise`);
+  if (mode === "full" && existing && existing.status === "completed" && missingSourceTypes.length > 0) {
+    console.log(`[cycle] Completed but missing sources: ${missingSourceTypes.join(", ")} \u2014 re-running fetch`);
+  }
+  const skipFetch = mode === "resummarize" || mode === "resynthesize";
+  function shouldFetchSource(sourceType) {
+    if (skipFetch) return false;
+    if (mode === "fetch-only" || mode === "full") {
+      return !existingSourceTypes.has(sourceType);
+    }
+    return true;
+  }
+  if (skipFetch && existingRawPosts.length === 0) {
+    console.log(`[cycle] No raw posts to ${mode}, aborting.`);
+    cycleRunning = false;
+    return;
+  }
+  const sourcesToFetch = ["reddit", "twitter", "bluesky", "reliefweb", "pmg"].filter(shouldFetchSource);
+  if (sourcesToFetch.length > 0) {
+    console.log(`[cycle] Sources to fetch: ${sourcesToFetch.join(", ")}`);
+  } else if (!skipFetch) {
+    console.log(`[cycle] All sources already have posts \u2014 skipping to ${mode === "fetch-only" ? "done" : "summarise"}`);
   }
   const cycleLog = existing || await createCycleLog({
     date: today,
@@ -1435,6 +1610,7 @@ async function runDailyCycle() {
     steps: [
       { name: "reddit", status: "pending" },
       { name: "twitter", status: "pending" },
+      { name: "bluesky", status: "pending" },
       { name: "reliefweb", status: "pending" },
       { name: "pmg", status: "pending" },
       { name: "store", status: "pending" },
@@ -1448,121 +1624,178 @@ async function runDailyCycle() {
   let sourcesRun = 0;
   try {
     await pruneOldRawPosts(30);
-    if (resumeFromStore) {
-      for (const step of ["reddit", "twitter", "reliefweb", "pmg", "store"]) {
-        completeStep(step, "skipped (cached)");
-      }
-    } else {
+    const fetch2 = shouldFetchSource;
+    let redditResult = { posts: [], error: null };
+    let twitterResult = { posts: [], error: null, cost: 0 };
+    let blueskyResult = { posts: [], error: null };
+    let reliefwebResult = { posts: [], error: null };
+    let pmgResult = { posts: [], error: null };
+    if (fetch2("reddit")) {
       setStep("reddit", "Fetching Reddit posts...");
-      const redditResult = await fetchReddit();
+      redditResult = await fetchReddit();
       completeStep("reddit", `${redditResult.posts.length} posts`);
+    } else {
+      completeStep("reddit", "skipped (already fetched)");
+    }
+    if (fetch2("twitter")) {
       setStep("twitter", "Scraping Twitter via Apify...");
-      const twitterResult = await fetchTwitter();
+      twitterResult = await fetchTwitter();
       totalCost += twitterResult.cost || 0;
       completeStep("twitter", `${twitterResult.posts.length} tweets`);
+    } else {
+      completeStep("twitter", "skipped (already fetched)");
+    }
+    if (fetch2("bluesky")) {
+      setStep("bluesky", "Searching Bluesky...");
+      blueskyResult = await fetchBluesky();
+      completeStep("bluesky", `${blueskyResult.posts.length} posts`);
+    } else {
+      completeStep("bluesky", "skipped (already fetched)");
+    }
+    if (fetch2("reliefweb")) {
       setStep("reliefweb", "Fetching ReliefWeb reports...");
-      const reliefwebResult = await fetchReliefWeb();
+      reliefwebResult = await fetchReliefWeb();
       completeStep("reliefweb", `${reliefwebResult.posts.length} reports`);
+    } else {
+      completeStep("reliefweb", "skipped (already fetched)");
+    }
+    if (fetch2("pmg")) {
       setStep("pmg", "Fetching PMG committee meetings...");
-      const pmgResult = await fetchPMG();
+      pmgResult = await fetchPMG();
       completeStep("pmg", `${pmgResult.posts.length} items`);
-      const activeSources = await getActiveSources();
-      for (const s of activeSources) {
-        let status = "success";
-        let postsRetrieved = 0;
-        if (s.type === "reddit") {
-          postsRetrieved = redditResult.posts.length;
-          status = redditResult.error ? "failed" : postsRetrieved === 0 ? "empty" : "success";
-        } else if (s.type === "reliefweb") {
-          postsRetrieved = reliefwebResult.posts.length;
-          status = reliefwebResult.error ? "failed" : postsRetrieved === 0 ? "empty" : "success";
-        } else if (s.type === "pmg") {
-          postsRetrieved = pmgResult.posts.length;
-          status = pmgResult.error ? "failed" : postsRetrieved === 0 ? "empty" : "success";
-        } else if (s.type === "twitter") {
-          postsRetrieved = twitterResult.posts.length;
-          status = twitterResult.error ? "failed" : postsRetrieved === 0 ? "empty" : "success";
-        }
-        await db.update(source).set({
-          lastRun: /* @__PURE__ */ new Date(),
-          lastRunStatus: status,
-          lastRunCost: 0,
-          postsRetrieved
-        }).where(eq3(source.id, s.id));
-        sourcesRun++;
-      }
-      const totalPosts = redditResult.posts.length + twitterResult.posts.length + reliefwebResult.posts.length + pmgResult.posts.length;
-      if (totalPosts === 0) {
-        failStep("store", "No posts fetched");
-        await updateCycleLog(cycleLog.id, {
-          status: "failed",
-          failedAtStep: "fetch_sources",
-          completedAt: /* @__PURE__ */ new Date(),
-          sourcesRun
-        });
-        cycleRunning = false;
-        currentProgress = null;
-        return;
-      }
-      setStep("store", `Storing ${totalPosts} raw posts...`);
-      const rawPosts = [];
-      for (const p of redditResult.posts) {
-        rawPosts.push({
-          sourceType: "reddit",
-          title: p.title,
-          body: p.body || p.title,
-          author: void 0,
-          url: p.url,
-          publishedAt: p.createdAt,
-          engagement: { score: p.score, comments: p.comments },
-          metadata: { subreddit: p.subreddit, flair: p.flair }
-        });
-      }
-      for (const p of twitterResult.posts) {
-        rawPosts.push({
-          sourceType: "twitter",
-          body: p.text,
-          author: p.author,
-          url: p.url,
-          publishedAt: p.createdAt,
-          engagement: { likes: p.likes, retweets: p.retweets, replies: p.replies },
-          metadata: { provinceTag: p.provinceTag, authorLocation: p.authorLocation }
-        });
-      }
-      for (const p of reliefwebResult.posts) {
-        rawPosts.push({
-          sourceType: "reliefweb",
-          title: p.title,
-          body: p.body || p.title,
-          url: p.url,
-          metadata: { theme: p.theme }
-        });
-      }
-      for (const p of pmgResult.posts) {
-        rawPosts.push({
-          sourceType: "pmg",
-          title: p.title,
-          body: p.body || p.title,
-          url: p.url,
-          metadata: { committee: p.committee }
-        });
-      }
+    } else {
+      completeStep("pmg", "skipped (already fetched)");
+    }
+    const activeSources = await getActiveSources();
+    const fetchResults = {
+      reddit: redditResult,
+      twitter: twitterResult,
+      bluesky: blueskyResult,
+      reliefweb: reliefwebResult,
+      pmg: pmgResult
+    };
+    for (const s of activeSources) {
+      const result = fetchResults[s.type];
+      if (!result || !fetch2(s.type)) continue;
+      const postsRetrieved = result.posts.length;
+      const status = result.error ? "failed" : postsRetrieved === 0 ? "empty" : "success";
+      await db.update(source).set({
+        lastRun: /* @__PURE__ */ new Date(),
+        lastRunStatus: status,
+        lastRunCost: 0,
+        postsRetrieved
+      }).where(eq3(source.id, s.id));
+      sourcesRun++;
+    }
+    const rawPosts = [];
+    for (const p of redditResult.posts) {
+      rawPosts.push({
+        sourceType: "reddit",
+        title: p.title,
+        body: p.body || p.title,
+        author: void 0,
+        url: p.url,
+        publishedAt: p.createdAt,
+        engagement: { score: p.score, comments: p.comments },
+        metadata: { subreddit: p.subreddit, flair: p.flair }
+      });
+    }
+    for (const p of twitterResult.posts) {
+      rawPosts.push({
+        sourceType: "twitter",
+        body: p.text,
+        author: p.author,
+        url: p.url,
+        publishedAt: p.createdAt,
+        engagement: { likes: p.likes, retweets: p.retweets, replies: p.replies },
+        metadata: { provinceTag: p.provinceTag, authorLocation: p.authorLocation }
+      });
+    }
+    for (const p of blueskyResult.posts) {
+      rawPosts.push({
+        sourceType: "bluesky",
+        body: p.text,
+        author: p.author,
+        url: p.url,
+        publishedAt: p.createdAt,
+        engagement: { likes: p.likes, reposts: p.reposts, replies: p.replies, quotes: p.quotes },
+        metadata: { provinceTag: p.provinceTag, displayName: p.displayName, langs: p.langs }
+      });
+    }
+    for (const p of reliefwebResult.posts) {
+      rawPosts.push({
+        sourceType: "reliefweb",
+        title: p.title,
+        body: p.body || p.title,
+        url: p.url,
+        metadata: { theme: p.theme }
+      });
+    }
+    for (const p of pmgResult.posts) {
+      rawPosts.push({
+        sourceType: "pmg",
+        title: p.title,
+        body: p.body || p.title,
+        url: p.url,
+        metadata: { committee: p.committee }
+      });
+    }
+    if (rawPosts.length > 0) {
+      setStep("store", `Storing ${rawPosts.length} new raw posts...`);
       const storedCount = await storeRawPosts(rawPosts, today);
       completeStep("store", `${storedCount} stored`);
+    } else {
+      completeStep("store", "no new posts to store");
+    }
+    if (mode === "fetch-only") {
+      await updateCycleLog(cycleLog.id, {
+        status: "completed",
+        completedAt: /* @__PURE__ */ new Date(),
+        sourcesRun,
+        totalCost
+      });
+      cycleRunning = false;
+      currentProgress = null;
+      console.log(`[cycle] Fetch-only complete. ${rawPosts.length} new posts stored.`);
+      return;
+    }
+    const allPostsCount = existingRawPosts.length + rawPosts.length;
+    if (allPostsCount === 0) {
+      failStep("store", "No posts available");
+      await updateCycleLog(cycleLog.id, {
+        status: "failed",
+        failedAtStep: "fetch_sources",
+        completedAt: /* @__PURE__ */ new Date(),
+        sourcesRun
+      });
+      cycleRunning = false;
+      currentProgress = null;
+      return;
     }
     setStep("summarise", "Loading raw posts for summarisation...");
     const rawPostRows = await getRawPostsByDate(today);
+    if (mode === "resummarize") {
+      console.log("[cycle] Resummarize mode \u2014 clearing existing summaries and snapshot");
+      await clearTodaysSummaries();
+      await clearTodaysSnapshot();
+    }
+    if (mode === "resynthesize" || existing && existing.status === "completed") {
+      console.log("[cycle] Clearing existing snapshot for re-synthesis");
+      await clearTodaysSnapshot();
+    }
     const existingSummaries = await getSummariesByDate(today);
-    if (existingSummaries.length > 0) {
-      console.log(`[cycle] Found ${existingSummaries.length} existing summaries \u2014 skipping to synthesise`);
+    const summarisedPostIds = new Set(existingSummaries.map((s) => s.rawPostId));
+    const unsummarisedPosts = rawPostRows.filter((p) => !summarisedPostIds.has(p.id));
+    if (existingSummaries.length > 0 && unsummarisedPosts.length === 0 && mode !== "resummarize") {
+      console.log(`[cycle] All ${rawPostRows.length} posts already summarised \u2014 skipping to synthesise`);
       completeStep("summarise", `${existingSummaries.length} summaries (cached)`);
       setStep("synthesise", `Synthesising from ${existingSummaries.length} cached summaries (Sonnet)...`);
       const analysis2 = await synthesiseWorld(existingSummaries, rawPostRows.length);
       const sonnetCost2 = estimateCost(analysis2.inputTokens, analysis2.outputTokens);
       totalCost += sonnetCost2;
       completeStep("synthesise", `$${sonnetCost2.toFixed(4)}`);
-      const activeSources = await getActiveSources();
-      const sourceIds2 = activeSources.map((s) => s.id);
+      const activeSources3 = await getActiveSources();
+      const sourceIds2 = activeSources3.map((s) => s.id);
       const snapshot2 = await createWorldSnapshot({
         date: today,
         sourceIds: sourceIds2,
@@ -1606,9 +1839,11 @@ async function runDailyCycle() {
       currentProgress = null;
       return;
     }
-    setStep("summarise", `Summarising ${rawPostRows.length} posts in batches (Haiku)...`);
+    const postsToSummarise = unsummarisedPosts.length > 0 ? unsummarisedPosts : rawPostRows;
+    const label = unsummarisedPosts.length > 0 && unsummarisedPosts.length < rawPostRows.length ? `Summarising ${unsummarisedPosts.length} new posts (${existingSummaries.length} already done)` : `Summarising ${postsToSummarise.length} posts in batches (Haiku)`;
+    setStep("summarise", `${label}...`);
     const { summaries, totalInputTokens: sumIn, totalOutputTokens: sumOut } = await summariseAll(
-      rawPostRows,
+      postsToSummarise,
       (batchIndex, total, count) => {
         if (currentProgress) {
           const step = currentProgress.steps.find((s) => s.name === "summarise");
@@ -1705,6 +1940,7 @@ var init_dailyCycle = __esm({
     init_reliefweb();
     init_pmg();
     init_apify();
+    init_bluesky();
     init_summarise();
     init_synthesise();
     init_storage();
@@ -1840,8 +2076,11 @@ router.get("/api/world/today", isAuthenticated, async (req, res) => {
     const user = req.user;
     const pw = await getPersonWorldToday(user.id);
     if (!pw) {
-      const snapshot2 = await getLatestSnapshot();
-      return res.json({ snapshot: snapshot2, personalised: false });
+      const todaysSnapshot = await getTodaysSnapshot();
+      const snapshot2 = todaysSnapshot || await getLatestSnapshot();
+      if (!snapshot2) return res.json({ snapshot: null, personalised: false });
+      const postCounts2 = await getPostCountsByProvince(snapshot2.date);
+      return res.json({ snapshot: snapshot2, postCounts: postCounts2, personalised: false });
     }
     const snapshot = await getSnapshotById(pw.snapshotId);
     const postCounts = snapshot ? await getPostCountsByProvince(snapshot.date) : {};
@@ -2104,17 +2343,39 @@ router.patch("/api/admin/sources/:id", isAdmin, async (req, res) => {
 });
 router.get("/api/admin/health", isAdmin, async (_req, res) => {
   try {
-    const [personCount, sourceCount, cycleLog, snapshot] = await Promise.all([
+    const [personCount, sourceCount, cycleLog, snapshot, sources, todaysRawPosts] = await Promise.all([
       getActivePersonCount(),
       getActiveSourceCount(),
       getTodaysCycleLog(),
-      getTodaysSnapshot()
+      getTodaysSnapshot(),
+      getActiveSources(),
+      getRawPostsByDate((/* @__PURE__ */ new Date()).toISOString().split("T")[0])
     ]);
+    const postsByType = /* @__PURE__ */ new Map();
+    for (const p of todaysRawPosts) {
+      const t = p.sourceType;
+      postsByType.set(t, (postsByType.get(t) || 0) + 1);
+    }
+    const sourceByType = /* @__PURE__ */ new Map();
+    for (const s of sources) {
+      const existing = sourceByType.get(s.type);
+      if (!existing || s.lastRun && (!existing.lastRun || s.lastRun > existing.lastRun)) {
+        sourceByType.set(s.type, { lastRun: s.lastRun, lastRunStatus: s.lastRunStatus });
+      }
+    }
+    const allTypes = ["reddit", "twitter", "bluesky", "reliefweb", "pmg"];
+    const sourceBreakdown = allTypes.map((type) => ({
+      type,
+      postsToday: postsByType.get(type) || 0,
+      lastRunStatus: sourceByType.get(type)?.lastRunStatus || null,
+      lastRun: sourceByType.get(type)?.lastRun || null
+    }));
     res.json({
       activePersons: personCount,
       activeSources: sourceCount,
       todaysCycle: cycleLog,
-      todaysSnapshot: snapshot ? { generated: true, date: snapshot.date, analysisCost: snapshot.analysisCost, totalPosts: snapshot.totalPostsAnalysed } : { generated: false }
+      todaysSnapshot: snapshot ? { generated: true, date: snapshot.date, analysisCost: snapshot.analysisCost, totalPosts: snapshot.totalPostsAnalysed } : { generated: false },
+      sourceBreakdown
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch health" });
@@ -2123,13 +2384,24 @@ router.get("/api/admin/health", isAdmin, async (_req, res) => {
 router.post("/api/admin/cycle/trigger", isAdmin, async (req, res) => {
   try {
     const user = req.user;
+    const mode = req.query.mode || "full";
+    const validModes = ["full", "fetch-only", "resummarize", "resynthesize"];
+    if (!validModes.includes(mode)) {
+      return res.status(400).json({ error: `Invalid mode. Use: ${validModes.join(", ")}` });
+    }
     audit({
-      action: "admin.cycle.triggered",
+      action: `admin.cycle.triggered.${mode}`,
       userId: user.id
     });
     const { runDailyCycle: runDailyCycle2 } = await Promise.resolve().then(() => (init_dailyCycle(), dailyCycle_exports));
-    runDailyCycle2().catch((err) => console.error("[cycle] Trigger failed:", err));
-    res.json({ message: "Daily cycle triggered. Check platform health for status." });
+    runDailyCycle2(mode).catch((err) => console.error("[cycle] Trigger failed:", err));
+    const messages = {
+      "full": "Full daily cycle triggered. New/missing sources will be fetched, then summarise + synthesise.",
+      "fetch-only": "Fetch-only triggered. New/missing sources will be fetched and stored. No summarisation.",
+      "resummarize": "Re-summarise triggered. Existing posts will be re-processed by Haiku + Sonnet.",
+      "resynthesize": "Re-synthesise triggered. Existing summaries will be re-aggregated by Sonnet."
+    };
+    res.json({ message: messages[mode], mode });
   } catch (err) {
     res.status(500).json({ error: "Failed to trigger cycle" });
   }

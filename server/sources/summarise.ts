@@ -78,6 +78,9 @@ function formatAttribution(post: RawPostRow): string {
   if (post.sourceType === "twitter") {
     return `x/@${post.author || "unknown"}`;
   }
+  if (post.sourceType === "bluesky") {
+    return `bsky/@${post.author || "unknown"}`;
+  }
   if (post.sourceType === "reliefweb") return "ReliefWeb";
   if (post.sourceType === "pmg") return "PMG";
   return post.sourceType;

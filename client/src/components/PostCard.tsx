@@ -31,6 +31,7 @@ interface PostCardProps {
 const SOURCE_STYLES_LIGHT: Record<string, { label: string; color: string; bg: string }> = {
   reddit: { label: "r/", color: "#8C7B6B", bg: "#EDE8D8" },
   twitter: { label: "x/", color: "#8A7860", bg: "#EDE8D8" },
+  bluesky: { label: "bsky/", color: "#7082A0", bg: "#E8ECF2" },
   reliefweb: { label: "ReliefWeb", color: "#6B7C8C", bg: "#E8EDF0" },
   pmg: { label: "PMG", color: "#7B8B7B", bg: "#EAF0EA" },
 };
@@ -40,6 +41,7 @@ const SOURCE_STYLES_LIGHT: Record<string, { label: string; color: string; bg: st
 const SOURCE_STYLES_DARK: Record<string, { label: string; color: string; bg: string; border: string }> = {
   reddit: { label: "r/", color: "#B0A090", bg: "rgba(140,123,107,0.15)", border: "rgba(140,123,107,0.12)" },
   twitter: { label: "x/", color: "#A89880", bg: "rgba(138,120,96,0.15)", border: "rgba(138,120,96,0.12)" },
+  bluesky: { label: "bsky/", color: "#90A8C0", bg: "rgba(112,130,160,0.15)", border: "rgba(112,130,160,0.12)" },
   reliefweb: { label: "ReliefWeb", color: "#8CA0B0", bg: "rgba(107,124,140,0.15)", border: "rgba(107,124,140,0.12)" },
   pmg: { label: "PMG", color: "#98B090", bg: "rgba(123,139,123,0.15)", border: "rgba(123,139,123,0.12)" },
 };
@@ -99,6 +101,7 @@ function isOlderThan24h(dateStr: string | null): boolean {
 function getSourceLabel(post: Post): string {
   if (post.sourceType === "reddit") return `r/${post.metadata?.subreddit || "southafrica"}`;
   if (post.sourceType === "twitter") return `x/@${post.author || "unknown"}`;
+  if (post.sourceType === "bluesky") return `bsky/@${post.author || "unknown"}`;
   if (post.sourceType === "pmg") return `PMG — ${post.metadata?.committee || "Committee"}`;
   return SOURCE_STYLES_LIGHT[post.sourceType]?.label || post.sourceType;
 }

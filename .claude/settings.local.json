@@ -12,7 +12,33 @@
       "Edit(~/.claude/skills/scaffold-project/**)",
       "Bash(curl -s http://localhost:5000/api/admin/health)",
       "Bash(node -e \":*)",
-      "Bash(netstat -ano)"
+      "Bash(netstat -ano)",
+      "Bash(find c:/LocalDev/zerogeist -name za.svg -o -name za-*.svg)",
+      "Read(//c/Users/xumlu/Downloads/**)",
+      "Bash(font)",
+      "Bash(nuneeto)",
+      "Bash(zero)",
+      "Bash(wordmark)",
+      "Read(//c/LocalDev/**)",
+      "Bash(taskkill //PID 31256 //F)",
+      "Bash(xargs grep:*)",
+      "Read(//c/Users/xumlu/.claude/**)",
+      "Bash(gh auth:*)",
+      "Bash(curl -s https://docs.firecrawl.dev/introduction)",
+      "Bash(curl -s https://docs.firecrawl.dev/features/scrape)",
+      "Bash(curl -s https://raw.githubusercontent.com/mendableai/firecrawl/main/README.md)",
+      "WebSearch",
+      "Bash(curl -s \"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=South+Africa&limit=2\")",
+      "Bash(python3 -c \"import sys,json; print\\(json.dumps\\(json.load\\(sys.stdin\\), indent=2\\)\\)\")",
+      "Bash(node -e \"fetch\\(''''https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=South+Africa&limit=2''''\\).then\\(r=>r.json\\(\\)\\).then\\(d=>console.log\\(JSON.stringify\\(d,null,2\\)\\)\\)\")",
+      "WebFetch(domain:docs.bsky.app)",
+      "WebFetch(domain:github.com)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=South+Africa&limit=5\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://bsky.social/xrpc/app.bsky.feed.searchPosts?q=South+Africa&limit=5\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=South+Africa&limit=5\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\xumlu\\.claude"
     ]
   }
 }

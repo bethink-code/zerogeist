@@ -527,7 +527,7 @@ export async function getPostsForProvince(date: string, provinceId: string) {
     .orderBy(desc(postSummary.signalStrength));
 }
 
-// ─── Clear Today's Cycle ────────────────────────────────
+// ─── Clear Today's Cycle — everything: raw posts, summaries, snapshot, cycle log
 export async function clearTodaysCycle() {
   const today = new Date().toISOString().split("T")[0];
   const [snapshot] = await db.select().from(worldSnapshot).where(eq(worldSnapshot.date, today));
@@ -535,6 +535,8 @@ export async function clearTodaysCycle() {
     await db.delete(personWorld).where(eq(personWorld.snapshotId, snapshot.id));
     await db.delete(worldSnapshot).where(eq(worldSnapshot.id, snapshot.id));
   }
+  await db.delete(postSummary).where(eq(postSummary.date, today));
+  await db.delete(rawPost).where(eq(rawPost.date, today));
   await db.delete(dailyCycleLog).where(eq(dailyCycleLog.date, today));
 }
 
@@ -559,4 +561,20 @@ export async function clearFromSynthesise() {
     await db.delete(worldSnapshot).where(eq(worldSnapshot.id, snapshot.id));
   }
   await db.delete(dailyCycleLog).where(eq(dailyCycleLog.date, today));
+}
+
+// Clear today's summaries only (keeps raw posts and snapshot)
+export async function clearTodaysSummaries() {
+  const today = new Date().toISOString().split("T")[0];
+  await db.delete(postSummary).where(eq(postSummary.date, today));
+}
+
+// Clear today's snapshot only (keeps raw posts and summaries)
+export async function clearTodaysSnapshot() {
+  const today = new Date().toISOString().split("T")[0];
+  const [snapshot] = await db.select().from(worldSnapshot).where(eq(worldSnapshot.date, today));
+  if (snapshot) {
+    await db.delete(personWorld).where(eq(personWorld.snapshotId, snapshot.id));
+    await db.delete(worldSnapshot).where(eq(worldSnapshot.id, snapshot.id));
+  }
 }
