@@ -79,25 +79,22 @@ export default function DashboardHeader({
   // ── Per-element transform maps ──
   // Everything is rendered at its FINAL (settled/small) size.
   // Big states use scale() to enlarge. This means no layout changes ever.
+  // Mobile uses smaller scale factors to stay within viewport.
 
-  const heroScale = big ? 1 : 1;
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 600;
+
   const heroTop = big ? "50%" : "0px";
   const heroTranslateY = big ? "-50%" : "0";
 
-  // Wordmark: final size 18px, scaled up ~1.65x for 30px equivalent
-  const wordmarkScale = big ? 1.65 : 1;
-
-  // Avatar: final size 22px, scaled up ~1.55x for 34px equivalent
-  const avatarScale = big ? 1.55 : 1;
+  const wordmarkScale = big ? (isMobile ? 1.3 : 1.65) : 1;
+  const avatarScale = big ? (isMobile ? 1.3 : 1.55) : 1;
   const avatarOpacity = phase === "loading" ? 0.08 : 1;
 
-  // Context (province name): final size 11px
   const contextScale = big ? 1.1 : 1;
   const contextOpacity = phase === "loading" ? 0 : 1;
 
-  // Voice block: final compact size, scaled up and pushed down for splash
-  const voiceScale = big ? 1.45 : 1;
-  const voiceTranslateY = big ? 28 : 0; // extra gap from brand in splash
+  const voiceScale = big ? (isMobile ? 1.1 : 1.45) : 1;
+  const voiceTranslateY = big ? (isMobile ? 16 : 28) : 0; // extra gap from brand in splash
   const voiceOpacity = (phase === "loading" || !hasVoice)
     ? (phase === "loading" ? 1 : 0)
     : (isProvinceTransitioning ? 0 : 1);
