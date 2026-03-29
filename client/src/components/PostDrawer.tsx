@@ -109,7 +109,7 @@ export default function PostDrawer({
           bottom: 52,
           left: 0,
           right: 0,
-          height: "58vh",
+          height: "calc(100vh - 52px)",
           backgroundColor: "#3A3020",
           borderTop: "1px solid rgba(221, 213, 192, 0.15)",
           borderRadius: "12px 12px 0 0",
