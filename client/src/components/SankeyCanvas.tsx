@@ -64,6 +64,8 @@ export default function SankeyCanvas({
   const animRef = useRef<number | null>(null);
   const renderLayoutRef = useRef<SankeyLayout | null>(null);
   const nodeIndexMapRef = useRef<Map<number, string>>(new Map());
+  // Congestion zoom state
+  const [zoomArea, setZoomArea] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
   // Photo image caching
   const photoRef = useRef<HTMLImageElement | null>(null);
