@@ -356,17 +356,15 @@ function HealthTab() {
     refetchInterval: polling ? 2000 : false,
   });
 
-  // Stop polling once cycle completes or fails — but only if it was in_progress first
   const cycleStatus = data?.todaysCycle?.status;
   const cycleDone = cycleStatus === "completed" || cycleStatus === "failed";
   if (polling && cycleDone) {
-    // Small delay to let final health data settle
     setTimeout(() => setPolling(false), 1000);
   }
 
   const triggerMutation = useMutation({
-    mutationFn: () =>
-      apiRequest("/api/admin/cycle/trigger", { method: "POST" }),
+    mutationFn: (mode: string = "full") =>
+      apiRequest(`/api/admin/cycle/trigger?mode=${mode}`, { method: "POST" }),
     onSuccess: () => {
       setPolling(true);
       queryClient.invalidateQueries({ queryKey: ["admin-health"] });
@@ -374,83 +372,74 @@ function HealthTab() {
   });
 
   const resetMutation = useMutation({
-    mutationFn: async (from: string = "all") => {
+    mutationFn: async (from: string) => {
       await apiRequest(`/api/admin/cycle/today?from=${from}`, { method: "DELETE" });
-      // Only auto-trigger for re-summarise and re-synthesise, not full reset
-      if (from !== "all") {
-        await apiRequest(`/api/admin/cycle/trigger?mode=${from === "summarise" ? "resummarize" : "resynthesize"}`, { method: "POST" });
-      }
     },
-    onSuccess: (_, from) => {
-      if (from !== "all") setPolling(true);
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-health"] });
     },
   });
 
   if (isLoading) return <p className="text-[var(--text-muted)] text-sm">Loading...</p>;
 
-  return (
-    <div className="space-y-8">
-      {/* Controls + Progress — always at top */}
-      <div className="flex gap-3 flex-wrap items-center">
-        <button
-          onClick={() => triggerMutation.mutate()}
-          disabled={triggerMutation.isPending || polling}
-          className="btn-primary text-sm"
-        >
-          {triggerMutation.isPending ? "Triggering..." : "Trigger daily cycle"}
-        </button>
+  const hasCycle = !!data?.todaysCycle;
+  const isRunning = cycleStatus === "in_progress";
+  const showingDate = data?.todaysSnapshot?.generated
+    ? data.todaysSnapshot.date
+    : data?.showingSnapshotDate || null;
 
-        {data?.todaysCycle && (
-          <>
-            <button
-              onClick={() => resetMutation.mutate("summarise")}
-              disabled={resetMutation.isPending || polling}
-              className="btn-secondary text-sm"
-              title="Keep raw posts, re-summarise + re-synthesise"
-            >
-              Re-summarise
-            </button>
-            <button
-              onClick={() => resetMutation.mutate("synthesise")}
-              disabled={resetMutation.isPending || polling}
-              className="btn-secondary text-sm"
-              title="Keep raw posts + summaries, re-synthesise only"
-            >
-              Re-synthesise
-            </button>
-            <button
-              onClick={() => {
-                if (window.confirm("This will delete ALL of today's data — raw posts, summaries, snapshot, and cycle log. You'll need to re-trigger to rebuild from scratch.\n\nAre you sure?")) {
-                  resetMutation.mutate("all");
-                }
-              }}
-              disabled={resetMutation.isPending || polling}
-              className="btn-destructive text-sm ml-auto"
-              title="Deletes today's raw posts, summaries, snapshot, and cycle log. You'll need to re-trigger to rebuild."
-            >
-              Reset today
-            </button>
-          </>
-        )}
+  return (
+    <div className="space-y-6">
+      {/* Platform stats */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <StatCard label="Active Persons" value={data?.activePersons ?? 0} />
+        <StatCard label="Active Sources" value={data?.activeSources ?? 0} />
+        <StatCard
+          label="Active Spirit"
+          value={showingDate || "No data"}
+        />
       </div>
 
-      {(polling || progress) && (
-        <div className="bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Cycle Progress</p>
-            {progress ? (
-              <p className="text-xs text-[var(--canola-400)] animate-pulse">{progress.detail}</p>
-            ) : (
-              <p className="text-xs text-[var(--canola-400)] animate-pulse">Starting...</p>
+      {/* ═══ TODAY'S CYCLE CARD ═══ */}
+      <div className="bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg overflow-hidden">
+
+        {/* Card header */}
+        <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: "1px solid var(--surface-border)" }}>
+          <div className="flex items-center gap-3">
+            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-medium">Today's Spirit</p>
+            {hasCycle && (
+              <span className={`text-xs font-medium ${
+                cycleStatus === "completed" ? "text-[var(--succulent-600)]" :
+                cycleStatus === "failed" ? "text-[var(--fire-600)]" :
+                "text-[var(--canola-400)]"
+              }`}>
+                {cycleStatus === "in_progress" ? "Running..." : cycleStatus}
+              </span>
             )}
+            {!hasCycle && <span className="text-xs text-[var(--text-placeholder)]">Not started</span>}
           </div>
-          {progress && (
-            <>
-              <div className="space-y-1.5">
+
+          {hasCycle && !isRunning && (
+            <span className="text-[10px] text-[var(--text-placeholder)]">
+              ${data.todaysCycle.totalCost?.toFixed(4) ?? "0.00"}
+            </span>
+          )}
+        </div>
+
+        {/* Live progress — shown during cycle run */}
+        {(polling || progress) && (
+          <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--surface-border)" }}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Progress</p>
+              {progress && (
+                <p className="text-xs text-[var(--canola-400)] animate-pulse">{progress.detail}</p>
+              )}
+            </div>
+            {progress && (
+              <div className="space-y-1">
                 {(progress.steps || []).map((step: any) => (
                   <div key={step.name} className="flex items-center gap-3">
-                    <span className="w-4 text-center">
+                    <span className="w-3 text-center text-xs">
                       {step.status === "done" && <span className="text-[var(--succulent-600)]">✓</span>}
                       {step.status === "running" && <span className="text-[var(--canola-400)] animate-pulse">●</span>}
                       {step.status === "failed" && <span className="text-[var(--fire-600)]">✗</span>}
@@ -459,87 +448,105 @@ function HealthTab() {
                     <span className={`text-xs flex-1 ${step.status === "running" ? "text-[var(--text-heading)]" : "text-[var(--text-muted)]"}`}>
                       {step.name}
                     </span>
-                    {step.detail && (
-                      <span className="text-xs text-[var(--text-muted)]">{step.detail}</span>
-                    )}
+                    {step.detail && <span className="text-xs text-[var(--text-muted)]">{step.detail}</span>}
                   </div>
                 ))}
               </div>
-              <p className="text-[10px] text-[var(--text-muted)]">
-                Elapsed: {Math.round((Date.now() - progress.startedAt) / 1000)}s
-              </p>
+            )}
+          </div>
+        )}
+
+        {/* Source breakdown */}
+        {data?.sourceBreakdown && data.sourceBreakdown.length > 0 && (
+          <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--surface-border)" }}>
+            <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-2">Sources</p>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              {data.sourceBreakdown.map((s: any) => (
+                <div key={s.type} className="flex items-center gap-2 text-xs">
+                  <span className="w-3 text-center">
+                    {s.postsToday > 0
+                      ? <span className="text-[var(--succulent-600)]">✓</span>
+                      : s.lastRunStatus === "failed"
+                      ? <span className="text-[var(--fire-600)]">✗</span>
+                      : <span className="text-[var(--text-placeholder)]">○</span>
+                    }
+                  </span>
+                  <span className="font-medium text-[var(--text-heading)]">{s.type}</span>
+                  <span className="text-[var(--text-muted)]">
+                    {s.postsToday > 0 ? s.postsToday : s.lastRunStatus === "failed" ? "err" : "—"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Error display */}
+        {data?.todaysCycle?.failedAtStep && (
+          <div className="px-4 py-2" style={{ borderBottom: "1px solid var(--surface-border)" }}>
+            <p className="text-xs text-[var(--fire-800)]">Failed at: {data.todaysCycle.failedAtStep}</p>
+          </div>
+        )}
+
+        {/* Actions — inside the card */}
+        <div className="px-4 py-3 flex gap-2 flex-wrap items-center" style={{ backgroundColor: "var(--surface-input)" }}>
+          {!hasCycle ? (
+            // No cycle yet — just trigger
+            <button
+              onClick={() => triggerMutation.mutate("full")}
+              disabled={triggerMutation.isPending}
+              className="btn-primary text-sm"
+            >
+              {triggerMutation.isPending ? "Starting..." : "Summon today's spirit"}
+            </button>
+          ) : isRunning ? (
+            // Running — show status only
+            <p className="text-xs text-[var(--canola-400)] animate-pulse">Spirit forming...</p>
+          ) : (
+            // Completed or failed — show all actions
+            <>
+              <button
+                onClick={() => triggerMutation.mutate("full")}
+                disabled={triggerMutation.isPending || polling}
+                className="btn-primary text-sm"
+              >
+                Re-summon spirit
+              </button>
+              <button
+                onClick={() => {
+                  resetMutation.mutate("summarise");
+                  setTimeout(() => triggerMutation.mutate("resummarize"), 500);
+                }}
+                disabled={triggerMutation.isPending || polling}
+                className="btn-secondary text-sm"
+              >
+                Re-summarise
+              </button>
+              <button
+                onClick={() => {
+                  resetMutation.mutate("synthesise");
+                  setTimeout(() => triggerMutation.mutate("resynthesize"), 500);
+                }}
+                disabled={triggerMutation.isPending || polling}
+                className="btn-secondary text-sm"
+              >
+                Re-synthesise
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm("This will banish today's spirit — all raw posts, summaries, and the snapshot will be deleted.\n\nThe dashboard will fall back to the previous spirit until you summon a new one.\n\nAre you sure?")) {
+                    resetMutation.mutate("all");
+                  }
+                }}
+                disabled={resetMutation.isPending || polling}
+                className="btn-destructive text-sm ml-auto"
+              >
+                Banish spirit
+              </button>
             </>
           )}
         </div>
-      )}
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Active Persons" value={data?.activePersons ?? 0} />
-        <StatCard label="Active Sources" value={data?.activeSources ?? 0} />
-        <StatCard
-          label="Today's Snapshot"
-          value={data?.todaysSnapshot?.generated ? "Generated" : "Pending"}
-        />
-        <StatCard
-          label="Daily Cycle"
-          value={data?.todaysCycle?.status ?? "Not run"}
-        />
       </div>
-
-      {data?.todaysCycle && (
-        <div className="bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg p-4 space-y-2">
-          <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Today's Cycle Details</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <span className="text-[var(--text-muted)]">Status: </span>
-              <span className={data.todaysCycle.status === "completed" ? "text-[var(--succulent-600)]" : data.todaysCycle.status === "failed" ? "text-[var(--fire-600)]" : "text-[var(--canola-400)]"}>
-                {data.todaysCycle.status}
-              </span>
-            </div>
-            <div>
-              <span className="text-[var(--text-muted)]">Sources run: </span>
-              {data.todaysCycle.sourcesRun}
-            </div>
-            <div>
-              <span className="text-[var(--text-muted)]">Persons processed: </span>
-              {data.todaysCycle.personsProcessed}
-            </div>
-            <div>
-              <span className="text-[var(--text-muted)]">Cost: </span>
-              ${data.todaysCycle.totalCost?.toFixed(4) ?? "0.00"}
-            </div>
-          </div>
-          {data.todaysCycle.failedAtStep && (
-            <p className="text-xs text-[var(--fire-800)]">Failed at: {data.todaysCycle.failedAtStep}</p>
-          )}
-
-          {/* Source breakdown — inside cycle card */}
-          {data?.sourceBreakdown && data.sourceBreakdown.length > 0 && (
-            <div className="pt-3 mt-3" style={{ borderTop: "1px solid var(--surface-border)" }}>
-              <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-2">Sources</p>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                {data.sourceBreakdown.map((s: any) => (
-                  <div key={s.type} className="flex items-center gap-2 text-xs">
-                    <span className="w-3 text-center">
-                      {s.postsToday > 0
-                        ? <span className="text-[var(--succulent-600)]">✓</span>
-                        : s.lastRunStatus === "failed"
-                        ? <span className="text-[var(--fire-600)]">✗</span>
-                        : <span className="text-[var(--text-placeholder)]">○</span>
-                      }
-                    </span>
-                    <span className="font-medium text-[var(--text-heading)]">{s.type}</span>
-                    <span className="text-[var(--text-muted)]">
-                      {s.postsToday > 0 ? s.postsToday : s.lastRunStatus === "failed" ? "err" : "—"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

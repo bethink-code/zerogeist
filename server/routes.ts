@@ -43,19 +43,20 @@ router.get("/api/auth/user", (req, res) => {
 router.get("/api/world/today", isAuthenticated, async (req, res) => {
   try {
     const user = req.user as any;
+    const today = new Date().toISOString().split("T")[0];
     const pw = await storage.getPersonWorldToday(user.id);
     if (!pw) {
-      // Try today's snapshot first, then fall back to latest
       const todaysSnapshot = await storage.getTodaysSnapshot();
       const snapshot = todaysSnapshot || await storage.getLatestSnapshot();
-      if (!snapshot) return res.json({ snapshot: null, personalised: false });
+      if (!snapshot) return res.json({ snapshot: null, personalised: false, stale: false });
       const postCounts = await storage.getPostCountsByProvince(snapshot.date);
-      return res.json({ snapshot, postCounts, personalised: false });
+      const stale = snapshot.date !== today;
+      return res.json({ snapshot, postCounts, personalised: false, stale, snapshotDate: snapshot.date });
     }
-    // Include the underlying snapshot + post counts for the dashboard
     const snapshot = await storage.getSnapshotById(pw.snapshotId);
     const postCounts = snapshot ? await storage.getPostCountsByProvince(snapshot.date) : {};
-    res.json({ ...pw, snapshot, postCounts, personalised: true });
+    const stale = snapshot ? snapshot.date !== today : false;
+    res.json({ ...pw, snapshot, postCounts, personalised: true, stale, snapshotDate: snapshot?.date });
   } catch (err) {
     console.error("Error fetching world:", err);
     res.status(500).json({ error: "Failed to fetch world data" });
@@ -373,11 +374,12 @@ router.patch("/api/admin/sources/:id", isAdmin, async (req, res) => {
 // GET /api/admin/health
 router.get("/api/admin/health", isAdmin, async (_req, res) => {
   try {
-    const [personCount, sourceCount, cycleLog, snapshot, sources, todaysRawPosts] = await Promise.all([
+    const [personCount, sourceCount, cycleLog, snapshot, latestSnapshot, sources, todaysRawPosts] = await Promise.all([
       storage.getActivePersonCount(),
       storage.getActiveSourceCount(),
       storage.getTodaysCycleLog(),
       storage.getTodaysSnapshot(),
+      storage.getLatestSnapshot(),
       storage.getActiveSources(),
       storage.getRawPostsByDate(new Date().toISOString().split("T")[0]),
     ]);
@@ -407,6 +409,9 @@ router.get("/api/admin/health", isAdmin, async (_req, res) => {
       lastRun: sourceByType.get(type)?.lastRun || null,
     }));
 
+    // Which snapshot is the dashboard actually showing?
+    const activeSnapshot = snapshot || latestSnapshot;
+
     res.json({
       activePersons: personCount,
       activeSources: sourceCount,
@@ -414,6 +419,7 @@ router.get("/api/admin/health", isAdmin, async (_req, res) => {
       todaysSnapshot: snapshot
         ? { generated: true, date: snapshot.date, analysisCost: snapshot.analysisCost, totalPosts: snapshot.totalPostsAnalysed }
         : { generated: false },
+      showingSnapshotDate: activeSnapshot?.date || null,
       sourceBreakdown,
     });
   } catch (err) {

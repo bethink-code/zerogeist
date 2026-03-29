@@ -35,7 +35,9 @@
       "WebFetch(domain:github.com)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=South+Africa&limit=5\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://bsky.social/xrpc/app.bsky.feed.searchPosts?q=South+Africa&limit=5\")",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=South+Africa&limit=5\")"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=South+Africa&limit=5\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://api.reliefweb.int/v1/reports?appname=zerogeist&filter[field]=country.name&filter[value]=South%20Africa&limit=1\")",
+      "Bash(curl -s -w \"\\\\n%{http_code}\" \"https://api.reliefweb.int/v1/reports?appname=zerogeist&limit=1\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\xumlu\\.claude"

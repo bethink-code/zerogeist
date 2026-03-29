@@ -20,6 +20,8 @@ interface DashboardHeaderProps {
   user: { name?: string; email?: string; avatar?: string | null } | null;
   isAdmin: boolean;
   onLogout: () => void;
+  spiritDate?: string | null;
+  stale?: boolean;
 }
 
 // ─── Transition ─────────────────────────────────────────
@@ -41,6 +43,8 @@ export default function DashboardHeader({
   user,
   isAdmin,
   onLogout,
+  spiritDate,
+  stale,
 }: DashboardHeaderProps) {
   const big = phase === "loading" || phase === "splash";
   const dark = big;
@@ -206,15 +210,14 @@ export default function DashboardHeader({
           </div>
         </div>
 
-        {/* ── CONTEXT: province name ── */}
-        <span
+        {/* ── CONTEXT: spirit date + province ── */}
+        <div
           id="context"
           style={{
-            fontSize: 11,
-            fontWeight: 500,
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
-            color: dark ? "rgba(255,255,255,0.3)" : "#8A7860",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 2,
             marginTop: 6,
             transform: `scale(${contextScale})`,
             transformOrigin: "center center",
@@ -222,8 +225,31 @@ export default function DashboardHeader({
             transition: `transform ${T_MOVE}, opacity ${T_FADE} 200ms, color ${T_COLOR}`,
           }}
         >
-          {provinceName}
-        </span>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 500,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              color: dark ? "rgba(255,255,255,0.3)" : "#8A7860",
+            }}
+          >
+            {provinceName}
+          </span>
+          {spiritDate && !dark && (
+            <span
+              style={{
+                fontSize: 9,
+                fontWeight: 400,
+                color: stale ? "#C85A1A" : "#B0A090",
+                letterSpacing: "0.03em",
+              }}
+            >
+              Spirit {new Date(spiritDate + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}
+              {stale && " (previous)"}
+            </span>
+          )}
+        </div>
 
         {/* ── VOICE: accent + quote + attribution ── */}
         <div

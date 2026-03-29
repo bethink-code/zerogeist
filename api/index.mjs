@@ -2074,17 +2074,20 @@ router.get("/api/auth/user", (req, res) => {
 router.get("/api/world/today", isAuthenticated, async (req, res) => {
   try {
     const user = req.user;
+    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
     const pw = await getPersonWorldToday(user.id);
     if (!pw) {
       const todaysSnapshot = await getTodaysSnapshot();
       const snapshot2 = todaysSnapshot || await getLatestSnapshot();
-      if (!snapshot2) return res.json({ snapshot: null, personalised: false });
+      if (!snapshot2) return res.json({ snapshot: null, personalised: false, stale: false });
       const postCounts2 = await getPostCountsByProvince(snapshot2.date);
-      return res.json({ snapshot: snapshot2, postCounts: postCounts2, personalised: false });
+      const stale2 = snapshot2.date !== today;
+      return res.json({ snapshot: snapshot2, postCounts: postCounts2, personalised: false, stale: stale2, snapshotDate: snapshot2.date });
     }
     const snapshot = await getSnapshotById(pw.snapshotId);
     const postCounts = snapshot ? await getPostCountsByProvince(snapshot.date) : {};
-    res.json({ ...pw, snapshot, postCounts, personalised: true });
+    const stale = snapshot ? snapshot.date !== today : false;
+    res.json({ ...pw, snapshot, postCounts, personalised: true, stale, snapshotDate: snapshot?.date });
   } catch (err) {
     console.error("Error fetching world:", err);
     res.status(500).json({ error: "Failed to fetch world data" });
@@ -2343,11 +2346,12 @@ router.patch("/api/admin/sources/:id", isAdmin, async (req, res) => {
 });
 router.get("/api/admin/health", isAdmin, async (_req, res) => {
   try {
-    const [personCount, sourceCount, cycleLog, snapshot, sources, todaysRawPosts] = await Promise.all([
+    const [personCount, sourceCount, cycleLog, snapshot, latestSnapshot, sources, todaysRawPosts] = await Promise.all([
       getActivePersonCount(),
       getActiveSourceCount(),
       getTodaysCycleLog(),
       getTodaysSnapshot(),
+      getLatestSnapshot(),
       getActiveSources(),
       getRawPostsByDate((/* @__PURE__ */ new Date()).toISOString().split("T")[0])
     ]);
@@ -2370,11 +2374,13 @@ router.get("/api/admin/health", isAdmin, async (_req, res) => {
       lastRunStatus: sourceByType.get(type)?.lastRunStatus || null,
       lastRun: sourceByType.get(type)?.lastRun || null
     }));
+    const activeSnapshot = snapshot || latestSnapshot;
     res.json({
       activePersons: personCount,
       activeSources: sourceCount,
       todaysCycle: cycleLog,
       todaysSnapshot: snapshot ? { generated: true, date: snapshot.date, analysisCost: snapshot.analysisCost, totalPosts: snapshot.totalPostsAnalysed } : { generated: false },
+      showingSnapshotDate: activeSnapshot?.date || null,
       sourceBreakdown
     });
   } catch (err) {

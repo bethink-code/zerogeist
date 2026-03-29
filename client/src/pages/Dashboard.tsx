@@ -156,6 +156,8 @@ export default function Dashboard() {
       <DashboardHeader
         phase={phase}
         provinceName={activeProvinceName}
+        spiritDate={worldData?.snapshotDate || null}
+        stale={worldData?.stale || false}
         voice={currentVoice}
         isProvinceTransitioning={isTransitioning}
         user={user}
