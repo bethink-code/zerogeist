@@ -228,16 +228,17 @@ export default function PostDrawer({
           </button>
         </div>
 
-        {/* Single post view — scrollable, constrained width */}
+        {/* Posts — CSS columns handles all resolutions naturally:
+             <480px: 1 column (with prev/next nav)
+             480-800px: 2 columns
+             800-1120px: 3 columns
+             1120px+: 4 columns */}
         <div
           ref={scrollRef}
           style={{
             flex: 1,
             overflowY: "auto",
             padding: "12px 20px 20px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
           }}
         >
           {posts.length === 0 ? (
@@ -253,75 +254,14 @@ export default function PostDrawer({
             >
               No voices in this stream yet.
             </p>
-          ) : currentPost ? (
-            <div style={{ width: "100%", maxWidth: 560 }}>
-              <PostCard post={currentPost} darkSurface onReadMore={setReadingPost} />
+          ) : (
+            <div style={{ columns: "300px", columnGap: 12 }}>
+              {posts.map((post) => (
+                <PostCard key={post.id} post={post} compact darkSurface onReadMore={setReadingPost} />
+              ))}
             </div>
-          ) : null}
+          )}
         </div>
-
-        {/* Navigation bar — prev / counter / next */}
-        {posts.length > 1 && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "8px 16px 10px",
-              borderTop: "1px solid rgba(221, 213, 192, 0.08)",
-              maxWidth: 560,
-              margin: "0 auto",
-              width: "100%",
-              flexShrink: 0,
-            }}
-          >
-            <button
-              onClick={goPrev}
-              disabled={currentIndex === 0}
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: "50%",
-                border: "1px solid rgba(221,213,192,0.15)",
-                backgroundColor: currentIndex === 0 ? "transparent" : "rgba(245,241,232,0.06)",
-                color: currentIndex === 0 ? "rgba(245,241,232,0.15)" : "rgba(245,241,232,0.6)",
-                cursor: currentIndex === 0 ? "default" : "pointer",
-                fontSize: 20,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                transition: "all 150ms",
-              }}
-            >
-              ‹
-            </button>
-
-            <span style={{ fontSize: 12, color: "rgba(245,241,232,0.4)" }}>
-              {currentIndex + 1} / {posts.length}
-            </span>
-
-            <button
-              onClick={goNext}
-              disabled={currentIndex >= posts.length - 1}
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: "50%",
-                border: "1px solid rgba(221,213,192,0.15)",
-                backgroundColor: currentIndex >= posts.length - 1 ? "transparent" : "rgba(245,241,232,0.06)",
-                color: currentIndex >= posts.length - 1 ? "rgba(245,241,232,0.15)" : "rgba(245,241,232,0.6)",
-                cursor: currentIndex >= posts.length - 1 ? "default" : "pointer",
-                fontSize: 20,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                transition: "all 150ms",
-              }}
-            >
-              ›
-            </button>
-          </div>
-        )}
 
         {/* ═══ Reading modal ═══ */}
         {readingPost && (
