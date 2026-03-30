@@ -46,6 +46,8 @@ export default function PostDrawer({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [readingPost, setReadingPost] = useState<Post | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [emotionFilter, setEmotionFilter] = useState<string | null>(null);
+  const [highSignalOnly, setHighSignalOnly] = useState(false);
 
   useEffect(() => {
     if (isOpen && scrollRef.current) {
@@ -54,6 +56,8 @@ export default function PostDrawer({
     if (!isOpen) {
       setReadingPost(null);
       setCurrentIndex(0);
+      setEmotionFilter(null);
+      setHighSignalOnly(false);
     }
   }, [isOpen, nodeLabel]);
 
@@ -73,6 +77,27 @@ export default function PostDrawer({
   }, [currentIndex]);
 
   const currentPost = posts[currentIndex] || null;
+
+  // Filtered posts
+  const filteredPosts = useMemo(() => {
+    let result = posts;
+    if (emotionFilter) result = result.filter((p) => p.emotion === emotionFilter);
+    if (highSignalOnly) result = result.filter((p) => (p.signalStrength || 0) >= 0.7);
+    return result;
+  }, [posts, emotionFilter, highSignalOnly]);
+
+  // Emotion counts for filter pills
+  const emotionCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of posts) {
+      counts.set(p.emotion, (counts.get(p.emotion) || 0) + 1);
+    }
+    return counts;
+  }, [posts]);
+
+  const highSignalCount = useMemo(() =>
+    posts.filter((p) => (p.signalStrength || 0) >= 0.7).length
+  , [posts]);
 
   // Sub-header summary
   const subHeader = useMemo(() => {
@@ -228,7 +253,108 @@ export default function PostDrawer({
           </button>
         </div>
 
-        {/* Posts — CSS columns handles all resolutions naturally:
+        {/* Filters — emotion pills + high signal toggle */}
+        {posts.length > 5 && (
+          <div
+            style={{
+              padding: "10px 20px 12px",
+              borderBottom: "1px solid rgba(221, 213, 192, 0.08)",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+              flexShrink: 0,
+            }}
+          >
+            {/* All button */}
+            <button
+              onClick={() => { setEmotionFilter(null); setHighSignalOnly(false); }}
+              style={{
+                padding: "4px 12px",
+                borderRadius: 4,
+                border: !emotionFilter && !highSignalOnly
+                  ? "1px solid rgba(245,241,232,0.3)"
+                  : "1px solid rgba(221,213,192,0.12)",
+                backgroundColor: !emotionFilter && !highSignalOnly
+                  ? "rgba(245,241,232,0.1)"
+                  : "transparent",
+                color: !emotionFilter && !highSignalOnly
+                  ? "rgba(245,241,232,0.8)"
+                  : "rgba(245,241,232,0.35)",
+                fontSize: 11,
+                fontWeight: 500,
+                cursor: "pointer",
+                transition: "all 150ms",
+              }}
+            >
+              All {posts.length}
+            </button>
+
+            {/* Emotion pills */}
+            {["anger", "grief", "fear", "hope", "joy"].map((em) => {
+              const count = emotionCounts.get(em) || 0;
+              if (count === 0) return null;
+              const active = emotionFilter === em;
+              const color = EMOTION_COLORS_DARK[em] || "#9070A0";
+              return (
+                <button
+                  key={em}
+                  onClick={() => setEmotionFilter(active ? null : em)}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: 4,
+                    border: active
+                      ? `1px solid ${color}50`
+                      : "1px solid rgba(221,213,192,0.08)",
+                    backgroundColor: active ? `${color}20` : "transparent",
+                    color: active ? color : "rgba(245,241,232,0.35)",
+                    fontSize: 11,
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    textTransform: "capitalize",
+                    transition: "all 150ms",
+                  }}
+                >
+                  {em} {count}
+                </button>
+              );
+            })}
+
+            {/* Separator */}
+            <div style={{ width: 1, height: 16, backgroundColor: "rgba(221,213,192,0.12)", margin: "0 4px" }} />
+
+            {/* High signal toggle */}
+            {highSignalCount > 0 && (
+              <button
+                onClick={() => setHighSignalOnly(!highSignalOnly)}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 4,
+                  border: highSignalOnly
+                    ? "1px solid rgba(245,241,232,0.3)"
+                    : "1px solid rgba(221,213,192,0.08)",
+                  backgroundColor: highSignalOnly ? "rgba(245,241,232,0.1)" : "transparent",
+                  color: highSignalOnly ? "rgba(245,241,232,0.8)" : "rgba(245,241,232,0.35)",
+                  fontSize: 11,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  transition: "all 150ms",
+                }}
+              >
+                High signal {highSignalCount}
+              </button>
+            )}
+
+            {/* Active filter count */}
+            {(emotionFilter || highSignalOnly) && (
+              <span style={{ fontSize: 11, color: "rgba(245,241,232,0.3)", marginLeft: 4 }}>
+                {filteredPosts.length} showing
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Posts — CSS Grid handles all resolutions:
              <480px: 1 column (with prev/next nav)
              480-800px: 2 columns
              800-1120px: 3 columns
@@ -241,7 +367,7 @@ export default function PostDrawer({
             padding: "12px 20px 20px",
           }}
         >
-          {posts.length === 0 ? (
+          {filteredPosts.length === 0 ? (
             <p
               style={{
                 color: "rgba(245, 241, 232, 0.4)",
@@ -252,7 +378,7 @@ export default function PostDrawer({
                 padding: "24px 0",
               }}
             >
-              No voices in this stream yet.
+              {posts.length === 0 ? "No voices in this stream yet." : "No posts match this filter."}
             </p>
           ) : (
             <div style={{
@@ -261,7 +387,7 @@ export default function PostDrawer({
               gap: 12,
               alignItems: "start",
             }}>
-              {posts.map((post) => (
+              {filteredPosts.map((post) => (
                 <PostCard key={post.id} post={post} compact darkSurface onReadMore={setReadingPost} />
               ))}
             </div>
