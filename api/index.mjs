@@ -2517,6 +2517,19 @@ router.delete("/api/admin/cycle/today", isAdmin, async (req, res) => {
     res.status(500).json({ error: "Failed to reset cycle" });
   }
 });
+router.get("/api/cron/daily-cycle", async (req, res) => {
+  const secret = req.headers.authorization?.replace("Bearer ", "");
+  if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  try {
+    const { runDailyCycle: runDailyCycle2 } = await Promise.resolve().then(() => (init_dailyCycle(), dailyCycle_exports));
+    runDailyCycle2("full").catch((err) => console.error("[cron] Cycle failed:", err));
+    res.json({ message: "Daily cycle triggered via cron" });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to trigger cycle" });
+  }
+});
 var routes_default = router;
 
 // server/api.ts

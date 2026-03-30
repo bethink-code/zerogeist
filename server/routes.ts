@@ -573,4 +573,21 @@ router.delete("/api/admin/cycle/today", isAdmin, async (req, res) => {
   }
 });
 
+// ─── Vercel Cron — daily cycle trigger ──────────────────
+// Secured by CRON_SECRET env var (set in Vercel project settings)
+router.get("/api/cron/daily-cycle", async (req, res) => {
+  const secret = req.headers.authorization?.replace("Bearer ", "");
+  if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const { runDailyCycle } = await import("./dailyCycle.js");
+    runDailyCycle("full").catch((err) => console.error("[cron] Cycle failed:", err));
+    res.json({ message: "Daily cycle triggered via cron" });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to trigger cycle" });
+  }
+});
+
 export default router;
