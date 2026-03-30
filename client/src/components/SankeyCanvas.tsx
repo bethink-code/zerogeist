@@ -413,30 +413,12 @@ export default function SankeyCanvas({
         const y = pad.top + node.y * flowH;
         const nodeH = node.height * flowH;
 
-        // Hit zones — responsive to screen width
-        // Mobile (<600px): each column owns ~33% of width (fat fingers)
-        // Desktop (>=600px): tighter zones around bar + label text
-        const mobile = w < 600;
+        // Hit zones — each column owns ~33% of the canvas width
+        const thirdW = w / 3;
         let hitX: number, hitW: number;
-
-        if (mobile) {
-          const thirdW = w / 3;
-          if (node.column === 0) { hitX = 0; hitW = thirdW; }
-          else if (node.column === 2) { hitX = w - thirdW; hitW = thirdW; }
-          else { hitX = thirdW; hitW = thirdW; }
-        } else {
-          if (node.column === 0) {
-            hitX = 0;
-            hitW = x + COL_W + Math.min(140, w * 0.12);
-          } else if (node.column === 2) {
-            const labelW = Math.min(140, w * 0.12);
-            hitX = x - labelW;
-            hitW = w - hitX;
-          } else {
-            hitX = x - Math.min(30, w * 0.02);
-            hitW = COL_W + Math.min(160, w * 0.14);
-          }
-        }
+        if (node.column === 0) { hitX = 0; hitW = thirdW; }
+        else if (node.column === 2) { hitX = w - thirdW; hitW = thirdW; }
+        else { hitX = thirdW; hitW = thirdW; }
 
         const r = colorIndex & 0xff;
         const g = (colorIndex >> 8) & 0xff;
