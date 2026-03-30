@@ -2002,6 +2002,24 @@ passport.use(
             message: "This is a private space. Access is by invitation only."
           });
         }
+        const [existing] = await db.select().from(person).where(eq(person.id, profile.id));
+        let userRecord;
+        if (existing) {
+          await db.update(person).set({
+            lastActive: /* @__PURE__ */ new Date(),
+            name: profile.displayName,
+            avatar: profile.photos?.[0]?.value || existing.avatar
+          }).where(eq(person.id, profile.id));
+          userRecord = existing;
+        } else {
+          const [newPerson] = await db.insert(person).values({
+            id: profile.id,
+            email,
+            name: profile.displayName,
+            avatar: profile.photos?.[0]?.value || null
+          }).returning();
+          userRecord = newPerson;
+        }
         const now = /* @__PURE__ */ new Date();
         if (invite) {
           await db.update(invitedPerson).set({
@@ -2020,22 +2038,7 @@ passport.use(
             note: "admin (auto-created)"
           });
         }
-        const [existing] = await db.select().from(person).where(eq(person.id, profile.id));
-        if (existing) {
-          await db.update(person).set({
-            lastActive: /* @__PURE__ */ new Date(),
-            name: profile.displayName,
-            avatar: profile.photos?.[0]?.value || existing.avatar
-          }).where(eq(person.id, profile.id));
-          return done(null, existing);
-        }
-        const [newPerson] = await db.insert(person).values({
-          id: profile.id,
-          email,
-          name: profile.displayName,
-          avatar: profile.photos?.[0]?.value || null
-        }).returning();
-        return done(null, newPerson);
+        return done(null, userRecord);
       } catch (err) {
         console.error("[auth] Login error:", err.message, err);
         return done(err, void 0);

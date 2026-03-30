@@ -46,7 +46,37 @@ passport.use(
           });
         }
 
-        // Record login — upsert invite record
+        // Upsert person record FIRST (invite.personId references person.id)
+        const [existing] = await db
+          .select()
+          .from(person)
+          .where(eq(person.id, profile.id));
+
+        let userRecord;
+        if (existing) {
+          await db
+            .update(person)
+            .set({
+              lastActive: new Date(),
+              name: profile.displayName,
+              avatar: profile.photos?.[0]?.value || existing.avatar,
+            })
+            .where(eq(person.id, profile.id));
+          userRecord = existing;
+        } else {
+          const [newPerson] = await db
+            .insert(person)
+            .values({
+              id: profile.id,
+              email,
+              name: profile.displayName,
+              avatar: profile.photos?.[0]?.value || null,
+            })
+            .returning();
+          userRecord = newPerson;
+        }
+
+        // Now update invite record (person exists, FK is safe)
         const now = new Date();
         if (invite) {
           await db
@@ -59,7 +89,6 @@ passport.use(
             })
             .where(eq(invitedPerson.id, invite.id));
         } else if (isAdmin) {
-          // Auto-create invite record for admin
           await db.insert(invitedPerson).values({
             email,
             firstLogin: now,
@@ -70,35 +99,7 @@ passport.use(
           });
         }
 
-        // Upsert person record
-        const [existing] = await db
-          .select()
-          .from(person)
-          .where(eq(person.id, profile.id));
-
-        if (existing) {
-          await db
-            .update(person)
-            .set({
-              lastActive: new Date(),
-              name: profile.displayName,
-              avatar: profile.photos?.[0]?.value || existing.avatar,
-            })
-            .where(eq(person.id, profile.id));
-          return done(null, existing);
-        }
-
-        const [newPerson] = await db
-          .insert(person)
-          .values({
-            id: profile.id,
-            email,
-            name: profile.displayName,
-            avatar: profile.photos?.[0]?.value || null,
-          })
-          .returning();
-
-        return done(null, newPerson);
+        return done(null, userRecord);
       } catch (err) {
         console.error("[auth] Login error:", (err as Error).message, err);
         return done(err as Error, undefined);
