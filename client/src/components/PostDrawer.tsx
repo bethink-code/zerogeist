@@ -255,7 +255,12 @@ export default function PostDrawer({
               No voices in this stream yet.
             </p>
           ) : (
-            <div style={{ columns: "300px", columnGap: 12 }}>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+              gap: 12,
+              alignItems: "start",
+            }}>
               {posts.map((post) => (
                 <PostCard key={post.id} post={post} compact darkSurface onReadMore={setReadingPost} />
               ))}
