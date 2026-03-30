@@ -86,6 +86,8 @@ export const invitedPerson = pgTable("invited_person", {
   invitedAt: timestamp("invited_at").defaultNow().notNull(),
   note: text("note"),
   firstLogin: timestamp("first_login"),
+  lastLogin: timestamp("last_login"),
+  loginCount: integer("login_count").default(0).notNull(),
   active: boolean("active").default(true).notNull(),
   personId: text("person_id").references(() => person.id),
 });

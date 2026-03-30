@@ -141,6 +141,8 @@ function PersonsTab() {
                   {p.firstLogin
                     ? ` · First login ${new Date(p.firstLogin).toLocaleDateString()}`
                     : " · Never logged in"}
+                  {p.lastLogin && ` · Last seen ${new Date(p.lastLogin).toLocaleDateString()}`}
+                  {p.loginCount > 0 && ` · ${p.loginCount} login${p.loginCount !== 1 ? "s" : ""}`}
                 </p>
               </div>
               <button

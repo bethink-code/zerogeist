@@ -114,6 +114,8 @@ var init_schema = __esm({
       invitedAt: timestamp("invited_at").defaultNow().notNull(),
       note: text("note"),
       firstLogin: timestamp("first_login"),
+      lastLogin: timestamp("last_login"),
+      loginCount: integer("login_count").default(0).notNull(),
       active: boolean("active").default(true).notNull(),
       personId: text("person_id").references(() => person.id)
     });
@@ -1991,16 +1993,29 @@ passport.use(
           return done(null, false, { message: "No email found in Google profile" });
         }
         const isAdmin2 = email === process.env.ADMIN_EMAIL;
-        if (!isAdmin2) {
-          const [invite] = await db.select().from(invitedPerson).where(eq(invitedPerson.email, email));
-          if (!invite || !invite.active) {
-            return done(null, false, {
-              message: "This is a private space. Access is by invitation only."
-            });
-          }
-          if (!invite.firstLogin) {
-            await db.update(invitedPerson).set({ firstLogin: /* @__PURE__ */ new Date(), personId: profile.id }).where(eq(invitedPerson.id, invite.id));
-          }
+        const [invite] = await db.select().from(invitedPerson).where(eq(invitedPerson.email, email));
+        if (!isAdmin2 && (!invite || !invite.active)) {
+          return done(null, false, {
+            message: "This is a private space. Access is by invitation only."
+          });
+        }
+        const now = /* @__PURE__ */ new Date();
+        if (invite) {
+          await db.update(invitedPerson).set({
+            ...invite.firstLogin ? {} : { firstLogin: now },
+            lastLogin: now,
+            loginCount: (invite.loginCount || 0) + 1,
+            personId: profile.id
+          }).where(eq(invitedPerson.id, invite.id));
+        } else if (isAdmin2) {
+          await db.insert(invitedPerson).values({
+            email,
+            firstLogin: now,
+            lastLogin: now,
+            loginCount: 1,
+            personId: profile.id,
+            note: "admin (auto-created)"
+          });
         }
         const [existing] = await db.select().from(person).where(eq(person.id, profile.id));
         if (existing) {

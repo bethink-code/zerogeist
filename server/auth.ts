@@ -33,25 +33,41 @@ passport.use(
 
         // Check whitelist — admin is always allowed
         const isAdmin = email === process.env.ADMIN_EMAIL;
-        if (!isAdmin) {
-          const [invite] = await db
-            .select()
-            .from(invitedPerson)
-            .where(eq(invitedPerson.email, email));
 
-          if (!invite || !invite.active) {
-            return done(null, false, {
-              message: "This is a private space. Access is by invitation only.",
-            });
-          }
+        // Track login for everyone (admin and invited)
+        const [invite] = await db
+          .select()
+          .from(invitedPerson)
+          .where(eq(invitedPerson.email, email));
 
-          // Record first login if not yet set
-          if (!invite.firstLogin) {
-            await db
-              .update(invitedPerson)
-              .set({ firstLogin: new Date(), personId: profile.id })
-              .where(eq(invitedPerson.id, invite.id));
-          }
+        if (!isAdmin && (!invite || !invite.active)) {
+          return done(null, false, {
+            message: "This is a private space. Access is by invitation only.",
+          });
+        }
+
+        // Record login — upsert invite record
+        const now = new Date();
+        if (invite) {
+          await db
+            .update(invitedPerson)
+            .set({
+              ...(invite.firstLogin ? {} : { firstLogin: now }),
+              lastLogin: now,
+              loginCount: (invite.loginCount || 0) + 1,
+              personId: profile.id,
+            })
+            .where(eq(invitedPerson.id, invite.id));
+        } else if (isAdmin) {
+          // Auto-create invite record for admin
+          await db.insert(invitedPerson).values({
+            email,
+            firstLogin: now,
+            lastLogin: now,
+            loginCount: 1,
+            personId: profile.id,
+            note: "admin (auto-created)",
+          });
         }
 
         // Upsert person record
