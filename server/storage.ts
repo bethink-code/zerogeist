@@ -250,6 +250,14 @@ export async function getTodaysCycleLog() {
   return log || null;
 }
 
+export async function getRecentCycleLogs(limit = 14) {
+  return db
+    .select()
+    .from(dailyCycleLog)
+    .orderBy(desc(dailyCycleLog.date))
+    .limit(limit);
+}
+
 export async function createCycleLog(data: typeof dailyCycleLog.$inferInsert) {
   const [log] = await db.insert(dailyCycleLog).values(data).returning();
   return log;

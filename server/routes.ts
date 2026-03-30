@@ -374,7 +374,7 @@ router.patch("/api/admin/sources/:id", isAdmin, async (req, res) => {
 // GET /api/admin/health
 router.get("/api/admin/health", isAdmin, async (_req, res) => {
   try {
-    const [personCount, sourceCount, cycleLog, snapshot, latestSnapshot, sources, todaysRawPosts] = await Promise.all([
+    const [personCount, sourceCount, cycleLog, snapshot, latestSnapshot, sources, todaysRawPosts, recentReadings] = await Promise.all([
       storage.getActivePersonCount(),
       storage.getActiveSourceCount(),
       storage.getTodaysCycleLog(),
@@ -382,6 +382,7 @@ router.get("/api/admin/health", isAdmin, async (_req, res) => {
       storage.getLatestSnapshot(),
       storage.getActiveSources(),
       storage.getRawPostsByDate(new Date().toISOString().split("T")[0]),
+      storage.getRecentCycleLogs(14),
     ]);
 
     // Per-source-type breakdown (grouped, not per source row)
@@ -421,6 +422,7 @@ router.get("/api/admin/health", isAdmin, async (_req, res) => {
         : { generated: false },
       showingSnapshotDate: activeSnapshot?.date || null,
       sourceBreakdown,
+      recentReadings: recentReadings.filter((r: any) => r.date !== new Date().toISOString().split("T")[0]),
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch health" });

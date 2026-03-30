@@ -548,7 +548,44 @@ function HealthTab() {
         </div>
       </div>
 
-      {/* Banish confirmation modal */}
+      {/* Recent readings */}
+      {data?.recentReadings?.length > 0 && (
+        <div className="bg-[var(--surface-card)] border-[0.5px] border-[var(--surface-border)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--surface-border)" }}>
+            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-medium">Previous Readings</p>
+          </div>
+          <div>
+            {data.recentReadings.map((r: any) => (
+              <div
+                key={r.date}
+                className="px-4 py-3 flex items-center justify-between text-sm"
+                style={{ borderBottom: "1px solid var(--surface-border)" }}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-3 text-center">
+                    {r.status === "completed"
+                      ? <span className="text-[var(--succulent-600)]">✓</span>
+                      : <span className="text-[var(--fire-600)]">✗</span>
+                    }
+                  </span>
+                  <span className="font-medium text-[var(--text-heading)]">
+                    {new Date(r.date + "T00:00:00").toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" })}
+                  </span>
+                </div>
+                <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
+                  <span>{r.sourcesRun} sources</span>
+                  <span>${r.totalCost?.toFixed(4)}</span>
+                  {r.completedAt && (
+                    <span>{new Date(r.completedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Clear confirmation modal */}
       <ConfirmModal
         isOpen={showBanish}
         title="Clear today's reading"

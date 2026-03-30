@@ -397,6 +397,9 @@ async function getTodaysCycleLog() {
   const [log] = await db.select().from(dailyCycleLog).where(eq2(dailyCycleLog.date, today));
   return log || null;
 }
+async function getRecentCycleLogs(limit = 14) {
+  return db.select().from(dailyCycleLog).orderBy(desc(dailyCycleLog.date)).limit(limit);
+}
 async function createCycleLog(data) {
   const [log] = await db.insert(dailyCycleLog).values(data).returning();
   return log;
@@ -2361,14 +2364,15 @@ router.patch("/api/admin/sources/:id", isAdmin, async (req, res) => {
 });
 router.get("/api/admin/health", isAdmin, async (_req, res) => {
   try {
-    const [personCount, sourceCount, cycleLog, snapshot, latestSnapshot, sources, todaysRawPosts] = await Promise.all([
+    const [personCount, sourceCount, cycleLog, snapshot, latestSnapshot, sources, todaysRawPosts, recentReadings] = await Promise.all([
       getActivePersonCount(),
       getActiveSourceCount(),
       getTodaysCycleLog(),
       getTodaysSnapshot(),
       getLatestSnapshot(),
       getActiveSources(),
-      getRawPostsByDate((/* @__PURE__ */ new Date()).toISOString().split("T")[0])
+      getRawPostsByDate((/* @__PURE__ */ new Date()).toISOString().split("T")[0]),
+      getRecentCycleLogs(14)
     ]);
     const postsByType = /* @__PURE__ */ new Map();
     for (const p of todaysRawPosts) {
@@ -2396,7 +2400,8 @@ router.get("/api/admin/health", isAdmin, async (_req, res) => {
       todaysCycle: cycleLog,
       todaysSnapshot: snapshot ? { generated: true, date: snapshot.date, analysisCost: snapshot.analysisCost, totalPosts: snapshot.totalPostsAnalysed } : { generated: false },
       showingSnapshotDate: activeSnapshot?.date || null,
-      sourceBreakdown
+      sourceBreakdown,
+      recentReadings: recentReadings.filter((r) => r.date !== (/* @__PURE__ */ new Date()).toISOString().split("T")[0])
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch health" });
