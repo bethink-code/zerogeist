@@ -100,6 +100,7 @@ passport.use(
 
         return done(null, newPerson);
       } catch (err) {
+        console.error("[auth] Login error:", (err as Error).message, err);
         return done(err as Error, undefined);
       }
     }

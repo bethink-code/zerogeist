@@ -2037,6 +2037,7 @@ passport.use(
         }).returning();
         return done(null, newPerson);
       } catch (err) {
+        console.error("[auth] Login error:", err.message, err);
         return done(err, void 0);
       }
     }
@@ -2578,10 +2579,25 @@ app.get(
 );
 app.get(
   "/auth/callback",
-  auth_default.authenticate("google", {
-    failureRedirect: "/?error=access_denied"
-  }),
-  (_req, res) => res.redirect("/")
+  (req, res, next) => {
+    auth_default.authenticate("google", (err, user, info) => {
+      if (err) {
+        console.error("[auth] Callback error:", err.message);
+        return res.redirect("/?error=auth_error");
+      }
+      if (!user) {
+        console.log("[auth] Login rejected:", info?.message || "unknown");
+        return res.redirect("/?error=access_denied");
+      }
+      req.logIn(user, (loginErr) => {
+        if (loginErr) {
+          console.error("[auth] Session error:", loginErr.message);
+          return res.redirect("/?error=auth_error");
+        }
+        return res.redirect("/");
+      });
+    })(req, res, next);
+  }
 );
 app.post("/auth/logout", (req, res) => {
   req.logout((err) => {

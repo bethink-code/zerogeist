@@ -56,10 +56,25 @@ app.get(
 
 app.get(
   "/auth/callback",
-  passport.authenticate("google", {
-    failureRedirect: "/?error=access_denied",
-  }),
-  (_req, res) => res.redirect("/")
+  (req, res, next) => {
+    passport.authenticate("google", (err: any, user: any, info: any) => {
+      if (err) {
+        console.error("[auth] Callback error:", err.message);
+        return res.redirect("/?error=auth_error");
+      }
+      if (!user) {
+        console.log("[auth] Login rejected:", info?.message || "unknown");
+        return res.redirect("/?error=access_denied");
+      }
+      req.logIn(user, (loginErr) => {
+        if (loginErr) {
+          console.error("[auth] Session error:", loginErr.message);
+          return res.redirect("/?error=auth_error");
+        }
+        return res.redirect("/");
+      });
+    })(req, res, next);
+  }
 );
 
 app.post("/auth/logout", (req, res) => {
