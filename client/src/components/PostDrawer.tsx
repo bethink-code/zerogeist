@@ -228,13 +228,16 @@ export default function PostDrawer({
           </button>
         </div>
 
-        {/* Single post view — scrollable */}
+        {/* Single post view — scrollable, constrained width */}
         <div
           ref={scrollRef}
           style={{
             flex: 1,
             overflowY: "auto",
             padding: "12px 20px 20px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
           }}
         >
           {posts.length === 0 ? (
@@ -251,7 +254,9 @@ export default function PostDrawer({
               No voices in this stream yet.
             </p>
           ) : currentPost ? (
-            <PostCard post={currentPost} darkSurface onReadMore={setReadingPost} />
+            <div style={{ width: "100%", maxWidth: 560 }}>
+              <PostCard post={currentPost} darkSurface onReadMore={setReadingPost} />
+            </div>
           ) : null}
         </div>
 
@@ -264,6 +269,9 @@ export default function PostDrawer({
               justifyContent: "space-between",
               padding: "8px 16px 10px",
               borderTop: "1px solid rgba(221, 213, 192, 0.08)",
+              maxWidth: 560,
+              margin: "0 auto",
+              width: "100%",
               flexShrink: 0,
             }}
           >
