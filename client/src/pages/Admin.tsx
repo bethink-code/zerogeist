@@ -399,7 +399,7 @@ function HealthTab() {
         <StatCard label="Active Persons" value={data?.activePersons ?? 0} />
         <StatCard label="Active Sources" value={data?.activeSources ?? 0} />
         <StatCard
-          label="Active Spirit"
+          label="Active Reading"
           value={showingDate || "No data"}
         />
       </div>
@@ -410,7 +410,7 @@ function HealthTab() {
         {/* Card header */}
         <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: "1px solid var(--surface-border)" }}>
           <div className="flex items-center gap-3">
-            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-medium">Today's Spirit</p>
+            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-medium">Today's Reading</p>
             {hasCycle && (
               <span className={`text-xs font-medium ${
                 cycleStatus === "completed" ? "text-[var(--succulent-600)]" :
@@ -501,11 +501,11 @@ function HealthTab() {
               disabled={triggerMutation.isPending}
               className="btn-primary text-sm"
             >
-              {triggerMutation.isPending ? "Starting..." : "Summon today's spirit"}
+              {triggerMutation.isPending ? "Starting..." : "Read today's geist"}
             </button>
           ) : isRunning ? (
             // Running — show status only
-            <p className="text-xs text-[var(--canola-400)] animate-pulse">Spirit forming...</p>
+            <p className="text-xs text-[var(--canola-400)] animate-pulse">Reading the field...</p>
           ) : (
             // Completed or failed — show all actions
             <>
@@ -514,7 +514,7 @@ function HealthTab() {
                 disabled={triggerMutation.isPending || polling}
                 className="btn-primary text-sm"
               >
-                Re-summon spirit
+                Re-read geist
               </button>
               <button
                 onClick={() => {
@@ -541,7 +541,7 @@ function HealthTab() {
                 disabled={resetMutation.isPending || polling}
                 className="btn-destructive text-sm ml-auto"
               >
-                Banish spirit
+                Clear today's reading
               </button>
             </>
           )}
@@ -551,10 +551,10 @@ function HealthTab() {
       {/* Banish confirmation modal */}
       <ConfirmModal
         isOpen={showBanish}
-        title="Banish today's spirit"
-        message={"This will delete all of today's raw posts, summaries, and the world snapshot.\n\nThe dashboard will fall back to the previous spirit until you summon a new one."}
-        confirmLabel="Banish spirit"
-        cancelLabel="Keep spirit"
+        title="Clear today's reading"
+        message={"This will clear all of today's raw posts, summaries, and the reading.\n\nThe dashboard will fall back to the previous day's geist until you take a new reading."}
+        confirmLabel="Clear today's reading"
+        cancelLabel="Keep reading"
         destructive
         onConfirm={() => {
           setShowBanish(false);
@@ -566,7 +566,7 @@ function HealthTab() {
       {/* Progress modal — shown during cycle runs */}
       <ProgressModal
         isOpen={polling && !!progress}
-        title="Summoning spirit..."
+        title="Taking today's reading..."
         detail={progress?.detail}
         steps={progress?.steps}
         closable={cycleDone}

@@ -243,7 +243,7 @@ export default function DashboardHeader({
                 letterSpacing: "0.03em",
               }}
             >
-              Spirit {new Date(spiritDate + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}
+              {new Date(spiritDate + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}
               {stale && " (previous)"}
             </span>
           )}
