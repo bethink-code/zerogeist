@@ -500,13 +500,14 @@ export default function SankeyCanvas({
   }, [hoveredNode, highlightedNode, drawBg, drawSankey, drawHitCanvas, layout]);
 
   // ── Hit testing ──
-  const hitTest = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // ── Hit testing — works with both mouse and touch coordinates ──
+  const hitTestXY = useCallback(
+    (clientX: number, clientY: number) => {
       const canvas = hitCanvasRef.current;
       if (!canvas) return null;
       const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const ctx = canvas.getContext("2d", { willReadFrequently: true });
       if (!ctx) return null;
@@ -517,6 +518,12 @@ export default function SankeyCanvas({
     []
   );
 
+  const hitTest = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => hitTestXY(e.clientX, e.clientY),
+    [hitTestXY]
+  );
+
+  // ── Desktop: hover + click ──
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       const nodeId = hitTest(e);
@@ -538,6 +545,38 @@ export default function SankeyCanvas({
   const handleMouseLeave = useCallback(() => {
     onNodeHover(null);
   }, [onNodeHover]);
+
+  // ── Touch: tap to highlight, tap again to open ──
+  const touchHighlightRef = useRef<string | null>(null);
+
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent<HTMLCanvasElement>) => {
+      const touch = e.changedTouches[0];
+      if (!touch) return;
+      e.preventDefault(); // prevent mouse event firing too
+
+      const nodeId = hitTestXY(touch.clientX, touch.clientY);
+
+      if (!nodeId) {
+        // Tapped empty space — clear highlight
+        touchHighlightRef.current = null;
+        onNodeHover(null);
+        return;
+      }
+
+      if (touchHighlightRef.current === nodeId) {
+        // Second tap on same node — open drawer
+        touchHighlightRef.current = null;
+        onNodeHover(null);
+        onNodeClick(nodeId);
+      } else {
+        // First tap — highlight (like hover)
+        touchHighlightRef.current = nodeId;
+        onNodeHover(nodeId);
+      }
+    },
+    [hitTestXY, onNodeHover, onNodeClick]
+  );
 
   const isEmpty = !layout || layout.nodes.length === 0;
 
@@ -570,6 +609,7 @@ export default function SankeyCanvas({
         onMouseMove={handleMouseMove}
         onClick={handleClick}
         onMouseLeave={handleMouseLeave}
+        onTouchEnd={handleTouchEnd}
       />
 
       {/* Empty state overlay */}
