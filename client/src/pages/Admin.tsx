@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
 import { Link } from "wouter";
@@ -365,6 +365,22 @@ function HealthTab() {
   if (polling && cycleDone) {
     setTimeout(() => setPolling(false), 1000);
   }
+
+  // Client-driven advance loop — Vercel serverless can't reliably do
+  // fire-and-forget self-chains, so the browser nudges the cycle forward.
+  const advanceInFlight = useRef(false);
+  useEffect(() => {
+    if (!progress || progress.status !== "in_progress" || !progress.cycleLogId) return;
+    if (advanceInFlight.current) return;
+    advanceInFlight.current = true;
+    apiRequest(`/api/admin/cycle/advance?id=${progress.cycleLogId}`, { method: "POST" })
+      .catch((err) => console.error("advance failed:", err))
+      .finally(() => {
+        advanceInFlight.current = false;
+        queryClient.invalidateQueries({ queryKey: ["admin-cycle-progress"] });
+        queryClient.invalidateQueries({ queryKey: ["admin-health"] });
+      });
+  }, [progress?.detail, progress?.status, progress?.cycleLogId]);
 
   const triggerMutation = useMutation({
     mutationFn: (mode: string = "full") =>
