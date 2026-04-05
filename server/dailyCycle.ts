@@ -99,12 +99,18 @@ export async function initCycle(mode: CycleMode): Promise<{
   // Determine which steps apply to this mode
   const steps = buildInitialSteps(mode);
 
-  // Mark sources we already have as "skipped (cached)" for full/fetch-only modes
+  // Mark sources we already have as "skipped (cached)" or inactive sources as skipped
   if (mode === "full" || mode === "fetch-only") {
     const existingPosts = await storage.getRawPostsByDate(today);
     const haveTypes = new Set(existingPosts.map((p: any) => p.sourceType));
+    const activeSources = await storage.getActiveSources();
+    const activeTypes = new Set(activeSources.map((s) => s.type));
     for (const s of steps) {
-      if (SOURCE_STEPS.includes(s.name as any) && haveTypes.has(s.name)) {
+      if (!SOURCE_STEPS.includes(s.name as any)) continue;
+      if (!activeTypes.has(s.name)) {
+        s.status = "skipped";
+        s.detail = "source inactive";
+      } else if (haveTypes.has(s.name)) {
         s.status = "skipped";
         s.detail = "already fetched";
       }

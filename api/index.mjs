@@ -1530,8 +1530,14 @@ async function initCycle(mode) {
   if (mode === "full" || mode === "fetch-only") {
     const existingPosts = await getRawPostsByDate(today);
     const haveTypes = new Set(existingPosts.map((p) => p.sourceType));
+    const activeSources = await getActiveSources();
+    const activeTypes = new Set(activeSources.map((s) => s.type));
     for (const s of steps) {
-      if (SOURCE_STEPS.includes(s.name) && haveTypes.has(s.name)) {
+      if (!SOURCE_STEPS.includes(s.name)) continue;
+      if (!activeTypes.has(s.name)) {
+        s.status = "skipped";
+        s.detail = "source inactive";
+      } else if (haveTypes.has(s.name)) {
         s.status = "skipped";
         s.detail = "already fetched";
       }
