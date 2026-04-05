@@ -719,8 +719,8 @@ async function fetchSubreddit(subreddit) {
     }
   });
   if (!res.ok) {
-    console.error(`[reddit] Failed to fetch r/${subreddit}: ${res.status}`);
-    return [];
+    console.error(`[reddit] Failed to fetch r/${subreddit}: ${res.status} ${res.statusText}`);
+    throw new Error(`r/${subreddit}: HTTP ${res.status}`);
   }
   const data = await res.json();
   const posts = data.data.children.map((c) => c.data);
