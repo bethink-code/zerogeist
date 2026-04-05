@@ -226,6 +226,33 @@ export async function advanceCycle(cycleLogId: string): Promise<{
     console.error(`[cycle] step "${next.name}" failed:`, err);
     next.status = "failed";
     next.detail = message;
+
+    // Source-step failures are non-fatal: skip this source, continue the cycle.
+    // AI/store/finalise failures are fatal.
+    const isSourceStep = SOURCE_STEPS.includes(next.name as any);
+    if (isSourceStep) {
+      const remaining = steps.find((s) => s.status !== "done" && s.status !== "skipped" && s.status !== "failed");
+      if (remaining) {
+        await storage.updateCycleLog(cycleLogId, {
+          currentStep: remaining.name,
+          stepDetail: `${next.name} failed: ${message}`,
+          steps,
+          lastAdvanceAt: new Date(),
+        });
+        return { done: false, nextStep: remaining.name, error: null };
+      }
+      // No remaining steps — treat as done (shouldn't happen in practice)
+      await storage.updateCycleLog(cycleLogId, {
+        status: "completed",
+        completedAt: new Date(),
+        currentStep: null,
+        stepDetail: "Done (some sources failed)",
+        steps,
+        lastAdvanceAt: new Date(),
+      });
+      return { done: true, nextStep: null, error: null };
+    }
+
     await storage.updateCycleLog(cycleLogId, {
       status: "failed",
       failedAtStep: `${next.name}: ${message}`,
