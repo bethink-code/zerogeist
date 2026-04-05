@@ -272,6 +272,11 @@ export async function updateCycleLog(id: string, data: Partial<typeof dailyCycle
   return log;
 }
 
+export async function getCycleLogById(id: string) {
+  const [log] = await db.select().from(dailyCycleLog).where(eq(dailyCycleLog.id, id));
+  return log || null;
+}
+
 // ─── Admin Health ────────────────────────────────────────
 export async function getActivePersonCount() {
   const persons = await db.select().from(person);
@@ -402,7 +407,7 @@ function inferProvinceHint(post: {
 
 export async function storeRawPosts(
   posts: {
-    sourceType: "reddit" | "reliefweb" | "pmg" | "twitter" | "telegram" | "rss" | "other";
+    sourceType: "reddit" | "reliefweb" | "pmg" | "twitter" | "bluesky" | "telegram" | "rss" | "other";
     title?: string;
     body: string;
     author?: string;

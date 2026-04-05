@@ -504,8 +504,18 @@ function HealthTab() {
               {triggerMutation.isPending ? "Starting..." : "Read today's geist"}
             </button>
           ) : isRunning ? (
-            // Running — show status only
-            <p className="text-xs text-[var(--canola-400)] animate-pulse">Reading the field...</p>
+            // Running — show status + escape hatch for stuck cycles
+            <>
+              <p className="text-xs text-[var(--canola-400)] animate-pulse">Reading the field...</p>
+              <button
+                onClick={() => setShowBanish(true)}
+                disabled={resetMutation.isPending}
+                className="btn-destructive text-xs ml-auto"
+                title="Force-clear a stuck cycle"
+              >
+                Clear stuck reading
+              </button>
+            </>
           ) : (
             // Completed or failed — show all actions
             <>

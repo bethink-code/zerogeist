@@ -449,21 +449,86 @@ router.post("/api/admin/cycle/trigger", isAdmin, async (req, res) => {
       userId: user.id,
     });
 
-    const { runDailyCycle } = await import("./dailyCycle.js");
-    runDailyCycle(mode as any).catch((err) => console.error("[cycle] Trigger failed:", err));
+    const { initCycle } = await import("./dailyCycle.js");
+    const { cycleLogId, alreadyComplete } = await initCycle(mode as any);
+
+    if (alreadyComplete) {
+      return res.json({ message: "Cycle already complete for today.", mode, cycleLogId, done: true });
+    }
+
+    // Kick off the self-chaining advance loop
+    scheduleAdvance(req, cycleLogId);
 
     const messages: Record<string, string> = {
-      "full": "Full daily cycle triggered. New/missing sources will be fetched, then summarise + synthesise.",
-      "fetch-only": "Fetch-only triggered. New/missing sources will be fetched and stored. No summarisation.",
-      "resummarize": "Re-summarise triggered. Existing posts will be re-processed by Haiku + Sonnet.",
-      "resynthesize": "Re-synthesise triggered. Existing summaries will be re-aggregated by Sonnet.",
+      "full": "Full daily cycle triggered. Running step-by-step.",
+      "fetch-only": "Fetch-only triggered. Fetching missing sources.",
+      "resummarize": "Re-summarise triggered. Re-running Haiku + Sonnet.",
+      "resynthesize": "Re-synthesise triggered. Re-running Sonnet only.",
     };
 
-    res.json({ message: messages[mode], mode });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to trigger cycle" });
+    res.json({ message: messages[mode], mode, cycleLogId });
+  } catch (err: any) {
+    console.error("[cycle] trigger failed:", err);
+    res.status(500).json({ error: "Failed to trigger cycle", detail: err?.message });
   }
 });
+
+// POST /api/admin/cycle/advance — runs ONE step of the cycle.
+// Auth: admin session OR bearer token (CRON_SECRET) for server-to-server chaining.
+router.post("/api/admin/cycle/advance", async (req, res) => {
+  try {
+    // Allow either admin session or bearer secret
+    const bearer = req.headers.authorization?.replace("Bearer ", "");
+    const sessionAdmin = req.isAuthenticated() && (req.user as any)?.email === process.env.ADMIN_EMAIL;
+    const validSecret = process.env.CRON_SECRET && bearer === process.env.CRON_SECRET;
+    if (!sessionAdmin && !validSecret) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const cycleLogId = (req.query.id as string) || (req.body?.cycleLogId as string);
+    if (!cycleLogId) return res.status(400).json({ error: "cycleLogId required" });
+
+    const { advanceCycle } = await import("./dailyCycle.js");
+    const result = await advanceCycle(cycleLogId);
+
+    // Chain to next step unless done or failed
+    if (!result.done && !result.error) {
+      scheduleAdvance(req, cycleLogId);
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    console.error("[cycle] advance endpoint failed:", err);
+    res.status(500).json({ error: "Advance failed", detail: err?.message });
+  }
+});
+
+// Fire-and-forget internal HTTP call to /api/admin/cycle/advance.
+// This gives each step a fresh Vercel lambda invocation.
+function scheduleAdvance(req: Request, cycleLogId: string): void {
+  const baseUrl = getBaseUrl(req);
+  const secret = process.env.CRON_SECRET;
+  const url = `${baseUrl}/api/admin/cycle/advance?id=${encodeURIComponent(cycleLogId)}`;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (secret) headers["Authorization"] = `Bearer ${secret}`;
+
+  // Fire-and-forget — don't await. The point is to trigger a new lambda,
+  // not to wait for it. We DO need to actually send the request though,
+  // so we give it a tick.
+  fetch(url, { method: "POST", headers }).catch((err) => {
+    console.error(`[cycle] scheduleAdvance fetch failed for ${cycleLogId}:`, err?.message);
+  });
+}
+
+function getBaseUrl(req: Request): string {
+  // In Vercel, VERCEL_URL is set to the deployment URL (no scheme)
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL;
+  // Local dev fallback — reconstruct from request
+  const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol || "http";
+  const host = req.get("host") || "localhost:5000";
+  return `${proto}://${host}`;
+}
 
 // GET /api/posts/today — real posts for province drill-down
 router.get("/api/posts/today", isAuthenticated, async (req, res) => {
@@ -540,10 +605,23 @@ router.put("/api/admin/prompts/:id", isAdmin, async (req, res) => {
 });
 
 // GET /api/admin/cycle/progress
-router.get("/api/admin/cycle/progress", isAdmin, async (_req, res) => {
+router.get("/api/admin/cycle/progress", isAdmin, async (req, res) => {
   try {
-    const { getCycleProgress } = await import("./dailyCycle.js");
-    const progress = getCycleProgress();
+    const { loadCycleProgress } = await import("./dailyCycle.js");
+    const progress = await loadCycleProgress();
+
+    // Stall-guard: if cycle is in_progress but lastAdvanceAt is stale (> 60s),
+    // assume the self-chain dropped a link and re-trigger.
+    if (progress && progress.status === "in_progress") {
+      const log = await storage.getTodaysCycleLog();
+      const lastAdvance = log?.lastAdvanceAt ? new Date(log.lastAdvanceAt).getTime() : 0;
+      const stalledFor = Date.now() - lastAdvance;
+      if (stalledFor > 60_000 && log) {
+        console.log(`[cycle] stall detected (${stalledFor}ms) — re-scheduling advance for ${log.id}`);
+        scheduleAdvance(req, log.id);
+      }
+    }
+
     res.json(progress);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch progress" });
@@ -584,11 +662,16 @@ router.get("/api/cron/daily-cycle", async (req, res) => {
   }
 
   try {
-    const { runDailyCycle } = await import("./dailyCycle.js");
-    runDailyCycle("full").catch((err) => console.error("[cron] Cycle failed:", err));
-    res.json({ message: "Daily cycle triggered via cron" });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to trigger cycle" });
+    const { initCycle } = await import("./dailyCycle.js");
+    const { cycleLogId, alreadyComplete } = await initCycle("full");
+    if (alreadyComplete) {
+      return res.json({ message: "Cycle already complete for today", done: true });
+    }
+    scheduleAdvance(req, cycleLogId);
+    res.json({ message: "Daily cycle triggered via cron", cycleLogId });
+  } catch (err: any) {
+    console.error("[cron] failed:", err);
+    res.status(500).json({ error: "Failed to trigger cycle", detail: err?.message });
   }
 });
 

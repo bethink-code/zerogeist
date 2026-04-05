@@ -279,4 +279,10 @@ export const dailyCycleLog = pgTable("daily_cycle_log", {
   totalCost: real("total_cost").default(0).notNull(),
   sourcesRun: integer("sources_run").default(0).notNull(),
   personsProcessed: integer("persons_processed").default(0).notNull(),
+  // Live progress state (persisted so UI can read across lambda instances)
+  mode: text("mode").default("full").notNull(),
+  currentStep: text("current_step"),
+  stepDetail: text("step_detail"),
+  steps: jsonb("steps").$type<{ name: string; status: "pending" | "running" | "done" | "failed" | "skipped"; detail?: string }[]>(),
+  lastAdvanceAt: timestamp("last_advance_at"),
 });

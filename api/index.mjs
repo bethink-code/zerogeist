@@ -268,7 +268,13 @@ var init_schema = __esm({
       failedAtStep: text("failed_at_step"),
       totalCost: real("total_cost").default(0).notNull(),
       sourcesRun: integer("sources_run").default(0).notNull(),
-      personsProcessed: integer("persons_processed").default(0).notNull()
+      personsProcessed: integer("persons_processed").default(0).notNull(),
+      // Live progress state (persisted so UI can read across lambda instances)
+      mode: text("mode").default("full").notNull(),
+      currentStep: text("current_step"),
+      stepDetail: text("step_detail"),
+      steps: jsonb("steps").$type(),
+      lastAdvanceAt: timestamp("last_advance_at")
     });
   }
 });
@@ -408,6 +414,10 @@ async function updateCycleLog(id, data) {
   const [log] = await db.update(dailyCycleLog).set(data).where(eq2(dailyCycleLog.id, id)).returning();
   return log;
 }
+async function getCycleLogById(id) {
+  const [log] = await db.select().from(dailyCycleLog).where(eq2(dailyCycleLog.id, id));
+  return log || null;
+}
 async function getActivePersonCount() {
   const persons = await db.select().from(person);
   return persons.length;
@@ -500,13 +510,6 @@ async function rescanProvinceHints(date2) {
     }
   }
   return { updated, total: posts.length };
-}
-async function pruneOldRawPosts(daysToKeep = 30) {
-  const cutoff = /* @__PURE__ */ new Date();
-  cutoff.setDate(cutoff.getDate() - daysToKeep);
-  const cutoffDate = cutoff.toISOString().split("T")[0];
-  await db.delete(postSummary).where(lt(postSummary.date, cutoffDate));
-  await db.delete(rawPost).where(lt(rawPost.date, cutoffDate));
 }
 async function storeSummaries(summaries) {
   let stored = 0;
@@ -1313,26 +1316,6 @@ Return a JSON array of objects. Return ONLY the JSON array, no markdown.`;
     outputTokens: response.usage.output_tokens
   };
 }
-async function summariseAll(posts, onBatchComplete) {
-  const batches = buildBatches(posts);
-  const allSummaries = [];
-  let totalInputTokens = 0;
-  let totalOutputTokens = 0;
-  for (let i = 0; i < batches.length; i++) {
-    try {
-      const result = await summariseBatch(batches[i], i);
-      allSummaries.push(...result.summaries);
-      totalInputTokens += result.inputTokens;
-      totalOutputTokens += result.outputTokens;
-      console.log(`[summarise] Batch ${i + 1}/${batches.length}: ${result.summaries.length} summaries from ${batches[i].posts.length} posts (${batches[i].provinceHint})`);
-      onBatchComplete?.(i + 1, batches.length, result.summaries.length);
-    } catch (err) {
-      console.error(`[summarise] Batch ${i + 1}/${batches.length} FAILED (${batches[i].provinceHint}, ${batches[i].posts.length} posts): ${err.message}`);
-      onBatchComplete?.(i + 1, batches.length, 0);
-    }
-  }
-  return { summaries: allSummaries, totalInputTokens, totalOutputTokens };
-}
 var client, BATCH_SIZE;
 var init_summarise = __esm({
   "server/sources/summarise.ts"() {
@@ -1521,192 +1504,197 @@ var init_synthesise = __esm({
 // server/dailyCycle.ts
 var dailyCycle_exports = {};
 __export(dailyCycle_exports, {
-  getCycleProgress: () => getCycleProgress,
-  runDailyCycle: () => runDailyCycle
+  advanceCycle: () => advanceCycle,
+  initCycle: () => initCycle,
+  loadCycleProgress: () => loadCycleProgress
 });
 import { eq as eq3 } from "drizzle-orm";
-function getCycleProgress() {
-  return currentProgress;
-}
-function setStep(stepName, detail) {
-  if (!currentProgress) return;
-  currentProgress.step = stepName;
-  currentProgress.detail = detail;
-  for (const s of currentProgress.steps) {
-    if (s.name === stepName) {
-      s.status = "running";
-      s.detail = detail;
-    }
-  }
-  console.log(`[cycle] ${stepName}: ${detail}`);
-}
-function completeStep(stepName, detail) {
-  if (!currentProgress) return;
-  for (const s of currentProgress.steps) {
-    if (s.name === stepName) {
-      s.status = "done";
-      if (detail) s.detail = detail;
-    }
-  }
-}
-function failStep(stepName, detail) {
-  if (!currentProgress) return;
-  for (const s of currentProgress.steps) {
-    if (s.name === stepName) {
-      s.status = "failed";
-      s.detail = detail;
-    }
-  }
-}
-async function runDailyCycle(mode = "full") {
-  if (cycleRunning) {
-    console.log("[cycle] Already running, skipping.");
-    return;
-  }
-  cycleRunning = true;
+async function initCycle(mode) {
   const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-  console.log(`[cycle] Starting daily cycle for ${today} (mode: ${mode})`);
   const existing = await getTodaysCycleLog();
-  const existingRawPosts = await getRawPostsByDate(today);
-  const existingSourceTypes = new Set(existingRawPosts.map((p) => p.sourceType));
-  const allSourceTypes = ["reddit", "twitter", "bluesky", "reliefweb", "pmg"];
-  const missingSourceTypes = allSourceTypes.filter((s) => !existingSourceTypes.has(s));
-  if (mode === "full" && existing && existing.status === "completed" && missingSourceTypes.length === 0) {
-    console.log("[cycle] Already completed today, all sources present, skipping.");
-    cycleRunning = false;
-    return;
+  if (mode === "resummarize") {
+    await clearTodaysSummaries();
+    await clearTodaysSnapshot();
+  } else if (mode === "resynthesize") {
+    await clearTodaysSnapshot();
   }
-  if (mode === "full" && existing && existing.status === "completed" && missingSourceTypes.length > 0) {
-    console.log(`[cycle] Completed but missing sources: ${missingSourceTypes.join(", ")} \u2014 re-running fetch`);
-  }
-  const skipFetch = mode === "resummarize" || mode === "resynthesize";
-  function shouldFetchSource(sourceType) {
-    if (skipFetch) return false;
-    if (mode === "fetch-only" || mode === "full") {
-      return !existingSourceTypes.has(sourceType);
+  if (mode === "full" && existing?.status === "completed") {
+    const existingPosts = await getRawPostsByDate(today);
+    const haveTypes = new Set(existingPosts.map((p) => p.sourceType));
+    const missing = SOURCE_STEPS.filter((s) => !haveTypes.has(s));
+    if (missing.length === 0) {
+      return { cycleLogId: existing.id, alreadyComplete: true, alreadyRunning: false };
     }
-    return true;
   }
-  if (skipFetch && existingRawPosts.length === 0) {
-    console.log(`[cycle] No raw posts to ${mode}, aborting.`);
-    cycleRunning = false;
-    return;
+  const steps = buildInitialSteps(mode);
+  if (mode === "full" || mode === "fetch-only") {
+    const existingPosts = await getRawPostsByDate(today);
+    const haveTypes = new Set(existingPosts.map((p) => p.sourceType));
+    for (const s of steps) {
+      if (SOURCE_STEPS.includes(s.name) && haveTypes.has(s.name)) {
+        s.status = "skipped";
+        s.detail = "already fetched";
+      }
+    }
   }
-  const sourcesToFetch = ["reddit", "twitter", "bluesky", "reliefweb", "pmg"].filter(shouldFetchSource);
-  if (sourcesToFetch.length > 0) {
-    console.log(`[cycle] Sources to fetch: ${sourcesToFetch.join(", ")}`);
-  } else if (!skipFetch) {
-    console.log(`[cycle] All sources already have posts \u2014 skipping to ${mode === "fetch-only" ? "done" : "summarise"}`);
+  if (existing) {
+    await updateCycleLog(existing.id, {
+      status: "in_progress",
+      failedAtStep: null,
+      mode,
+      steps,
+      currentStep: null,
+      stepDetail: "Ready",
+      lastAdvanceAt: /* @__PURE__ */ new Date(),
+      completedAt: null
+    });
+    return { cycleLogId: existing.id, alreadyComplete: false, alreadyRunning: false };
   }
-  const cycleLog = existing || await createCycleLog({
+  const created = await createCycleLog({
     date: today,
     status: "in_progress",
     sourcesRun: 0,
     personsProcessed: 0,
-    totalCost: 0
+    totalCost: 0,
+    mode,
+    steps,
+    stepDetail: "Ready",
+    lastAdvanceAt: /* @__PURE__ */ new Date()
   });
-  if (existing) {
-    await updateCycleLog(cycleLog.id, { status: "in_progress" });
+  return { cycleLogId: created.id, alreadyComplete: false, alreadyRunning: false };
+}
+async function advanceCycle(cycleLogId) {
+  const log = await getCycleLogById(cycleLogId);
+  if (!log) return { done: true, nextStep: null, error: "cycle log not found" };
+  if (log.status === "completed") return { done: true, nextStep: null, error: null };
+  if (log.status === "failed") return { done: true, nextStep: null, error: log.failedAtStep };
+  const steps = log.steps || buildInitialSteps(log.mode || "full");
+  const next = steps.find((s) => s.status !== "done" && s.status !== "skipped" && s.status !== "failed");
+  if (!next) {
+    await updateCycleLog(cycleLogId, {
+      status: "completed",
+      completedAt: /* @__PURE__ */ new Date(),
+      currentStep: null,
+      stepDetail: "Done"
+    });
+    return { done: true, nextStep: null, error: null };
   }
-  currentProgress = {
-    step: "starting",
-    detail: "Initialising daily cycle...",
-    startedAt: Date.now(),
-    steps: [
-      { name: "reddit", status: "pending" },
-      { name: "twitter", status: "pending" },
-      { name: "bluesky", status: "pending" },
-      { name: "reliefweb", status: "pending" },
-      { name: "pmg", status: "pending" },
-      { name: "store", status: "pending" },
-      { name: "summarise", status: "pending" },
-      { name: "synthesise", status: "pending" },
-      { name: "personalise", status: "pending" },
-      { name: "finalise", status: "pending" }
-    ]
-  };
-  let totalCost = 0;
-  let sourcesRun = 0;
+  next.status = "running";
+  if (!next.detail) next.detail = "Starting...";
+  await updateCycleLog(cycleLogId, {
+    currentStep: next.name,
+    stepDetail: next.detail,
+    steps,
+    lastAdvanceAt: /* @__PURE__ */ new Date()
+  });
+  console.log(`[cycle] advance: running step "${next.name}" on cycle ${cycleLogId}`);
   try {
-    await pruneOldRawPosts(30);
-    const fetch2 = shouldFetchSource;
-    let redditResult = { posts: [], error: null };
-    let twitterResult = { posts: [], error: null, cost: 0 };
-    let blueskyResult = { posts: [], error: null };
-    let reliefwebResult = { posts: [], error: null };
-    let pmgResult = { posts: [], error: null };
-    if (fetch2("reddit")) {
-      setStep("reddit", "Fetching Reddit posts...");
-      redditResult = await fetchReddit();
-      completeStep("reddit", `${redditResult.posts.length} posts`);
-    } else {
-      completeStep("reddit", "skipped (already fetched)");
+    const result = await runStep(next.name, cycleLogId, log.mode);
+    if (result.stayOnStep) {
+      next.status = "running";
+      next.detail = result.detail;
+      await updateCycleLog(cycleLogId, {
+        steps,
+        stepDetail: result.detail,
+        lastAdvanceAt: /* @__PURE__ */ new Date()
+      });
+      return { done: false, nextStep: next.name, error: null };
     }
-    if (fetch2("twitter")) {
-      setStep("twitter", "Scraping Twitter via Apify...");
-      twitterResult = await fetchTwitter();
-      totalCost += twitterResult.cost || 0;
-      completeStep("twitter", `${twitterResult.posts.length} tweets`);
-    } else {
-      completeStep("twitter", "skipped (already fetched)");
+    next.status = "done";
+    next.detail = result.detail;
+    const remaining = steps.find((s) => s.status !== "done" && s.status !== "skipped" && s.status !== "failed");
+    if (!remaining) {
+      await updateCycleLog(cycleLogId, {
+        status: "completed",
+        completedAt: /* @__PURE__ */ new Date(),
+        currentStep: null,
+        stepDetail: "Done",
+        steps,
+        lastAdvanceAt: /* @__PURE__ */ new Date()
+      });
+      console.log(`[cycle] complete: ${cycleLogId}`);
+      return { done: true, nextStep: null, error: null };
     }
-    if (fetch2("bluesky")) {
-      setStep("bluesky", "Searching Bluesky...");
-      blueskyResult = await fetchBluesky();
-      completeStep("bluesky", `${blueskyResult.posts.length} posts`);
-    } else {
-      completeStep("bluesky", "skipped (already fetched)");
-    }
-    if (fetch2("reliefweb")) {
-      setStep("reliefweb", "Fetching ReliefWeb reports...");
-      reliefwebResult = await fetchReliefWeb();
-      completeStep("reliefweb", `${reliefwebResult.posts.length} reports`);
-    } else {
-      completeStep("reliefweb", "skipped (already fetched)");
-    }
-    if (fetch2("pmg")) {
-      setStep("pmg", "Fetching PMG committee meetings...");
-      pmgResult = await fetchPMG();
-      completeStep("pmg", `${pmgResult.posts.length} items`);
-    } else {
-      completeStep("pmg", "skipped (already fetched)");
-    }
-    const activeSources = await getActiveSources();
-    const fetchResults = {
-      reddit: redditResult,
-      twitter: twitterResult,
-      bluesky: blueskyResult,
-      reliefweb: reliefwebResult,
-      pmg: pmgResult
-    };
-    for (const s of activeSources) {
-      const result = fetchResults[s.type];
-      if (!result || !fetch2(s.type)) continue;
-      const postsRetrieved = result.posts.length;
-      const status = result.error ? "failed" : postsRetrieved === 0 ? "empty" : "success";
-      await db.update(source).set({
-        lastRun: /* @__PURE__ */ new Date(),
-        lastRunStatus: status,
-        lastRunCost: 0,
-        postsRetrieved
-      }).where(eq3(source.id, s.id));
-      sourcesRun++;
-    }
-    const rawPosts = [];
-    for (const p of redditResult.posts) {
-      rawPosts.push({
+    await updateCycleLog(cycleLogId, {
+      currentStep: remaining.name,
+      stepDetail: "Pending",
+      steps,
+      lastAdvanceAt: /* @__PURE__ */ new Date()
+    });
+    return { done: false, nextStep: remaining.name, error: null };
+  } catch (err) {
+    const message = err?.message?.slice(0, 300) || "unknown error";
+    console.error(`[cycle] step "${next.name}" failed:`, err);
+    next.status = "failed";
+    next.detail = message;
+    await updateCycleLog(cycleLogId, {
+      status: "failed",
+      failedAtStep: `${next.name}: ${message}`,
+      completedAt: /* @__PURE__ */ new Date(),
+      currentStep: next.name,
+      stepDetail: message,
+      steps,
+      lastAdvanceAt: /* @__PURE__ */ new Date()
+    });
+    return { done: true, nextStep: null, error: message };
+  }
+}
+async function loadCycleProgress() {
+  const log = await getTodaysCycleLog();
+  if (!log) return null;
+  const steps = log.steps || [];
+  return {
+    step: log.currentStep || "",
+    detail: log.stepDetail || "",
+    startedAt: log.startedAt ? new Date(log.startedAt).getTime() : Date.now(),
+    steps,
+    status: log.status,
+    cycleLogId: log.id
+  };
+}
+async function runStep(stepName, cycleLogId, mode) {
+  if (SOURCE_STEPS.includes(stepName)) {
+    return runSourceStep(stepName, cycleLogId);
+  }
+  switch (stepName) {
+    case "summarise":
+      return runSummariseStep(cycleLogId);
+    case "synthesise":
+      return runSynthesiseStep(cycleLogId);
+    case "personalise":
+      return runPersonaliseStep(cycleLogId);
+    case "finalise":
+      return runFinaliseStep(cycleLogId);
+    default:
+      throw new Error(`Unknown step: ${stepName}`);
+  }
+}
+async function runSourceStep(name, cycleLogId) {
+  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  let result;
+  if (name === "reddit") result = await fetchReddit();
+  else if (name === "twitter") result = await fetchTwitter();
+  else if (name === "bluesky") result = await fetchBluesky();
+  else if (name === "reliefweb") result = await fetchReliefWeb();
+  else if (name === "pmg") result = await fetchPMG();
+  else throw new Error(`Unknown source: ${name}`);
+  if (result.error) {
+    throw new Error(result.error);
+  }
+  const rows = [];
+  for (const p of result.posts) {
+    if (name === "reddit") {
+      rows.push({
         sourceType: "reddit",
         title: p.title,
         body: p.body || p.title,
-        author: void 0,
         url: p.url,
         publishedAt: p.createdAt,
         engagement: { score: p.score, comments: p.comments },
         metadata: { subreddit: p.subreddit, flair: p.flair }
       });
-    }
-    for (const p of twitterResult.posts) {
-      rawPosts.push({
+    } else if (name === "twitter") {
+      rows.push({
         sourceType: "twitter",
         body: p.text,
         author: p.author,
@@ -1715,9 +1703,8 @@ async function runDailyCycle(mode = "full") {
         engagement: { likes: p.likes, retweets: p.retweets, replies: p.replies },
         metadata: { provinceTag: p.provinceTag, authorLocation: p.authorLocation }
       });
-    }
-    for (const p of blueskyResult.posts) {
-      rawPosts.push({
+    } else if (name === "bluesky") {
+      rows.push({
         sourceType: "bluesky",
         body: p.text,
         author: p.author,
@@ -1726,18 +1713,16 @@ async function runDailyCycle(mode = "full") {
         engagement: { likes: p.likes, reposts: p.reposts, replies: p.replies, quotes: p.quotes },
         metadata: { provinceTag: p.provinceTag, displayName: p.displayName, langs: p.langs }
       });
-    }
-    for (const p of reliefwebResult.posts) {
-      rawPosts.push({
+    } else if (name === "reliefweb") {
+      rows.push({
         sourceType: "reliefweb",
         title: p.title,
         body: p.body || p.title,
         url: p.url,
         metadata: { theme: p.theme }
       });
-    }
-    for (const p of pmgResult.posts) {
-      rawPosts.push({
+    } else if (name === "pmg") {
+      rows.push({
         sourceType: "pmg",
         title: p.title,
         body: p.body || p.title,
@@ -1745,199 +1730,166 @@ async function runDailyCycle(mode = "full") {
         metadata: { committee: p.committee }
       });
     }
-    if (rawPosts.length > 0) {
-      setStep("store", `Storing ${rawPosts.length} new raw posts...`);
-      const storedCount = await storeRawPosts(rawPosts, today);
-      completeStep("store", `${storedCount} stored`);
-    } else {
-      completeStep("store", "no new posts to store");
-    }
-    if (mode === "fetch-only") {
-      await updateCycleLog(cycleLog.id, {
-        status: "completed",
-        completedAt: /* @__PURE__ */ new Date(),
-        sourcesRun,
-        totalCost
-      });
-      cycleRunning = false;
-      currentProgress = null;
-      console.log(`[cycle] Fetch-only complete. ${rawPosts.length} new posts stored.`);
-      return;
-    }
-    const allPostsCount = existingRawPosts.length + rawPosts.length;
-    if (allPostsCount === 0) {
-      failStep("store", "No posts available");
-      await updateCycleLog(cycleLog.id, {
-        status: "failed",
-        failedAtStep: "fetch_sources",
-        completedAt: /* @__PURE__ */ new Date(),
-        sourcesRun
-      });
-      cycleRunning = false;
-      currentProgress = null;
-      return;
-    }
-    setStep("summarise", "Loading raw posts for summarisation...");
-    const rawPostRows = await getRawPostsByDate(today);
-    if (mode === "resummarize") {
-      console.log("[cycle] Resummarize mode \u2014 clearing existing summaries and snapshot");
-      await clearTodaysSummaries();
-      await clearTodaysSnapshot();
-    }
-    if (mode === "resynthesize" || existing && existing.status === "completed") {
-      console.log("[cycle] Clearing existing snapshot for re-synthesis");
-      await clearTodaysSnapshot();
-    }
-    const existingSummaries = await getSummariesByDate(today);
-    const summarisedPostIds = new Set(existingSummaries.map((s) => s.rawPostId));
-    const unsummarisedPosts = rawPostRows.filter((p) => !summarisedPostIds.has(p.id));
-    if (existingSummaries.length > 0 && unsummarisedPosts.length === 0 && mode !== "resummarize") {
-      console.log(`[cycle] All ${rawPostRows.length} posts already summarised \u2014 skipping to synthesise`);
-      completeStep("summarise", `${existingSummaries.length} summaries (cached)`);
-      setStep("synthesise", `Synthesising from ${existingSummaries.length} cached summaries (Sonnet)...`);
-      const analysis2 = await synthesiseWorld(existingSummaries, rawPostRows.length);
-      const sonnetCost2 = estimateCost(analysis2.inputTokens, analysis2.outputTokens);
-      totalCost += sonnetCost2;
-      completeStep("synthesise", `$${sonnetCost2.toFixed(4)}`);
-      const activeSources3 = await getActiveSources();
-      const sourceIds2 = activeSources3.map((s) => s.id);
-      const snapshot2 = await createWorldSnapshot({
-        date: today,
-        sourceIds: sourceIds2,
-        fieldState: analysis2.fieldState,
-        nationalEmotion: analysis2.nationalEmotion,
-        nationalIntensity: analysis2.nationalIntensity,
-        nationalConsensus: analysis2.nationalConsensus,
-        provinces: analysis2.provinces,
-        totalPostsAnalysed: rawPostRows.length,
-        analysisCost: sonnetCost2
-      });
-      setStep("personalise", "Generating personalised world views...");
-      const persons2 = await getAllActivePersons();
-      let personsProcessed2 = 0;
-      for (const p of persons2) {
-        try {
-          await createPersonWorld({
-            personId: p.id,
-            snapshotId: snapshot2.id,
-            date: today,
-            weightedProvinces: analysis2.provinces,
-            weightedThemes: null,
-            personalDigest: analysis2.fieldState,
-            personalQuestionContext: analysis2.fieldState
-          });
-          personsProcessed2++;
-        } catch (err) {
-        }
-      }
-      completeStep("personalise", `${personsProcessed2} persons`);
-      setStep("finalise", `Total cost: $${totalCost.toFixed(4)}`);
-      await updateCycleLog(cycleLog.id, {
-        status: "completed",
-        completedAt: /* @__PURE__ */ new Date(),
-        totalCost,
-        sourcesRun,
-        personsProcessed: personsProcessed2
-      });
-      completeStep("finalise", `Done \u2014 $${totalCost.toFixed(4)}`);
-      cycleRunning = false;
-      currentProgress = null;
-      return;
-    }
-    const postsToSummarise = unsummarisedPosts.length > 0 ? unsummarisedPosts : rawPostRows;
-    const label = unsummarisedPosts.length > 0 && unsummarisedPosts.length < rawPostRows.length ? `Summarising ${unsummarisedPosts.length} new posts (${existingSummaries.length} already done)` : `Summarising ${postsToSummarise.length} posts in batches (Haiku)`;
-    setStep("summarise", `${label}...`);
-    const { summaries, totalInputTokens: sumIn, totalOutputTokens: sumOut } = await summariseAll(
-      postsToSummarise,
-      (batchIndex, total, count) => {
-        if (currentProgress) {
-          const step = currentProgress.steps.find((s) => s.name === "summarise");
-          if (step) step.detail = `Batch ${batchIndex}/${total} (${count} summaries)`;
-        }
-      }
-    );
-    const summaryRows = summaries.map((s) => ({
-      date: today,
-      rawPostId: s.rawPostId,
-      provinceId: s.provinceId,
-      sourceType: s.sourceType,
-      themes: s.themes,
-      emotion: s.emotion,
-      intensity: s.intensity,
-      signalStrength: s.signalStrength,
-      voiceWorthy: s.voiceWorthy,
-      voiceText: s.voiceText,
-      voiceAttribution: s.voiceAttribution
-    }));
-    await storeSummaries(summaryRows);
-    const haikuCost = estimateHaikuCost(sumIn, sumOut);
-    totalCost += haikuCost;
-    completeStep("summarise", `${summaries.length} summaries, $${haikuCost.toFixed(4)} (${sumIn} in, ${sumOut} out)`);
-    setStep("synthesise", `Synthesising world snapshot from ${summaries.length} summaries (Sonnet)...`);
-    const analysis = await synthesiseWorld(summaries, rawPostRows.length);
-    const sonnetCost = estimateCost(analysis.inputTokens, analysis.outputTokens);
-    totalCost += sonnetCost;
-    completeStep("synthesise", `$${sonnetCost.toFixed(4)} (${analysis.inputTokens} in, ${analysis.outputTokens} out)`);
-    const activeSources2 = await getActiveSources();
-    const sourceIds = activeSources2.map((s) => s.id);
-    const snapshot = await createWorldSnapshot({
-      date: today,
-      sourceIds,
-      fieldState: analysis.fieldState,
-      nationalEmotion: analysis.nationalEmotion,
-      nationalIntensity: analysis.nationalIntensity,
-      nationalConsensus: analysis.nationalConsensus,
-      provinces: analysis.provinces,
-      totalPostsAnalysed: rawPostRows.length,
-      analysisCost: haikuCost + sonnetCost
-    });
-    console.log(`[cycle] World snapshot stored: ${snapshot.id}`);
-    setStep("personalise", "Generating personalised world views...");
-    const persons = await getAllActivePersons();
-    let personsProcessed = 0;
-    for (const p of persons) {
-      try {
-        await createPersonWorld({
-          personId: p.id,
-          snapshotId: snapshot.id,
-          date: today,
-          weightedProvinces: analysis.provinces,
-          weightedThemes: null,
-          personalDigest: analysis.fieldState,
-          personalQuestionContext: analysis.fieldState
-        });
-        personsProcessed++;
-      } catch (err) {
-        console.error(`[cycle] Failed to create person_world for ${p.id}: ${err.message}`);
-      }
-    }
-    completeStep("personalise", `${personsProcessed} persons`);
-    setStep("finalise", `Total cost: $${totalCost.toFixed(4)}`);
-    await updateCycleLog(cycleLog.id, {
-      status: "completed",
-      completedAt: /* @__PURE__ */ new Date(),
-      totalCost,
-      sourcesRun,
-      personsProcessed
-    });
-    completeStep("finalise", `Done \u2014 $${totalCost.toFixed(4)}`);
-    console.log(`[cycle] Daily cycle complete for ${today}`);
-  } catch (err) {
-    console.error(`[cycle] Daily cycle failed:`, err);
-    failStep(currentProgress?.step || "unknown", err.message?.slice(0, 200) || "unknown");
-    await updateCycleLog(cycleLog.id, {
-      status: "failed",
-      failedAtStep: err.message?.slice(0, 200) || "unknown",
-      completedAt: /* @__PURE__ */ new Date(),
-      totalCost,
-      sourcesRun
-    });
-  } finally {
-    cycleRunning = false;
-    currentProgress = null;
   }
+  let stored = 0;
+  if (rows.length > 0) {
+    stored = await storeRawPosts(rows, today);
+  }
+  const activeSources = await getActiveSources();
+  const srcRow = activeSources.find((s) => s.type === name);
+  if (srcRow) {
+    const status = result.posts.length === 0 ? "empty" : "success";
+    await db.update(source).set({
+      lastRun: /* @__PURE__ */ new Date(),
+      lastRunStatus: status,
+      lastRunCost: result.cost || 0,
+      postsRetrieved: result.posts.length
+    }).where(eq3(source.id, srcRow.id));
+  }
+  const log = await getCycleLogById(cycleLogId);
+  if (log) {
+    await updateCycleLog(cycleLogId, {
+      totalCost: (log.totalCost || 0) + (result.cost || 0),
+      sourcesRun: (log.sourcesRun || 0) + 1
+    });
+  }
+  return { detail: `${result.posts.length} fetched, ${stored} stored` };
 }
-var cycleRunning, currentProgress;
+async function runSummariseStep(cycleLogId) {
+  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  const rawPosts = await getRawPostsByDate(today);
+  if (rawPosts.length === 0) {
+    throw new Error("No raw posts to summarise");
+  }
+  const existingSummaries = await getSummariesByDate(today);
+  const summarisedIds = new Set(existingSummaries.map((s) => s.rawPostId));
+  const unsummarised = rawPosts.filter((p) => !summarisedIds.has(p.id));
+  if (unsummarised.length === 0) {
+    return { detail: `${existingSummaries.length} summaries (cached)` };
+  }
+  const batches = buildBatches(unsummarised);
+  const batchesToRun = batches.slice(0, SUMMARISE_BATCHES_PER_ADVANCE);
+  let summariesStored = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  for (let i = 0; i < batchesToRun.length; i++) {
+    try {
+      const batchResult = await summariseBatch(batchesToRun[i], i);
+      inputTokens += batchResult.inputTokens;
+      outputTokens += batchResult.outputTokens;
+      const rows = batchResult.summaries.map((s) => ({
+        date: today,
+        rawPostId: s.rawPostId,
+        provinceId: s.provinceId,
+        sourceType: s.sourceType,
+        themes: s.themes,
+        emotion: s.emotion,
+        intensity: s.intensity,
+        signalStrength: s.signalStrength,
+        voiceWorthy: s.voiceWorthy,
+        voiceText: s.voiceText,
+        voiceAttribution: s.voiceAttribution
+      }));
+      await storeSummaries(rows);
+      summariesStored += rows.length;
+    } catch (err) {
+      console.error(`[summarise] batch ${i + 1} failed:`, err.message);
+    }
+  }
+  const cost = estimateHaikuCost(inputTokens, outputTokens);
+  const log = await getCycleLogById(cycleLogId);
+  if (log) {
+    await updateCycleLog(cycleLogId, {
+      totalCost: (log.totalCost || 0) + cost
+    });
+  }
+  const remaining = batches.length - batchesToRun.length;
+  if (remaining > 0) {
+    return {
+      detail: `${existingSummaries.length + summariesStored}/${rawPosts.length} summarised (${remaining} batches left)`,
+      stayOnStep: true
+    };
+  }
+  const finalCount = existingSummaries.length + summariesStored;
+  return { detail: `${finalCount} summaries, $${cost.toFixed(4)}` };
+}
+async function runSynthesiseStep(cycleLogId) {
+  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  const summaries = await getSummariesByDate(today);
+  if (summaries.length === 0) throw new Error("No summaries to synthesise");
+  const rawPosts = await getRawPostsByDate(today);
+  const analysis = await synthesiseWorld(summaries, rawPosts.length);
+  const cost = estimateCost(analysis.inputTokens, analysis.outputTokens);
+  const activeSources = await getActiveSources();
+  const sourceIds = activeSources.map((s) => s.id);
+  await createWorldSnapshot({
+    date: today,
+    sourceIds,
+    fieldState: analysis.fieldState,
+    nationalEmotion: analysis.nationalEmotion,
+    nationalIntensity: analysis.nationalIntensity,
+    nationalConsensus: analysis.nationalConsensus,
+    provinces: analysis.provinces,
+    totalPostsAnalysed: rawPosts.length,
+    analysisCost: cost
+  });
+  const log = await getCycleLogById(cycleLogId);
+  if (log) {
+    await updateCycleLog(cycleLogId, {
+      totalCost: (log.totalCost || 0) + cost
+    });
+  }
+  return { detail: `$${cost.toFixed(4)} (${analysis.inputTokens} in, ${analysis.outputTokens} out)` };
+}
+async function runPersonaliseStep(cycleLogId) {
+  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  const snapshot = await getLatestSnapshot();
+  if (!snapshot || snapshot.date !== today) throw new Error("No snapshot for today");
+  const persons = await getAllActivePersons();
+  let processed = 0;
+  for (const p of persons) {
+    try {
+      await createPersonWorld({
+        personId: p.id,
+        snapshotId: snapshot.id,
+        date: today,
+        weightedProvinces: snapshot.provinces,
+        weightedThemes: null,
+        personalDigest: snapshot.fieldState,
+        personalQuestionContext: snapshot.fieldState
+      });
+      processed++;
+    } catch (err) {
+    }
+  }
+  await updateCycleLog(cycleLogId, { personsProcessed: processed });
+  return { detail: `${processed} persons` };
+}
+async function runFinaliseStep(cycleLogId) {
+  const log = await getCycleLogById(cycleLogId);
+  const total = log?.totalCost || 0;
+  return { detail: `Done \u2014 $${total.toFixed(4)}` };
+}
+function buildInitialSteps(mode) {
+  const steps = ALL_STEPS.map((name) => ({ name, status: "pending" }));
+  if (mode === "fetch-only") {
+    for (const s of steps) {
+      if (["summarise", "synthesise", "personalise", "finalise"].includes(s.name)) {
+        s.status = "skipped";
+      }
+    }
+  } else if (mode === "resummarize") {
+    for (const s of steps) {
+      if (SOURCE_STEPS.includes(s.name)) s.status = "skipped";
+    }
+  } else if (mode === "resynthesize") {
+    for (const s of steps) {
+      if (SOURCE_STEPS.includes(s.name) || s.name === "summarise") s.status = "skipped";
+    }
+  }
+  return steps;
+}
+var SOURCE_STEPS, ALL_STEPS, SUMMARISE_BATCHES_PER_ADVANCE;
 var init_dailyCycle = __esm({
   "server/dailyCycle.ts"() {
     "use strict";
@@ -1951,8 +1903,15 @@ var init_dailyCycle = __esm({
     init_storage();
     init_db();
     init_schema();
-    cycleRunning = false;
-    currentProgress = null;
+    SOURCE_STEPS = ["reddit", "twitter", "bluesky", "reliefweb", "pmg"];
+    ALL_STEPS = [
+      ...SOURCE_STEPS,
+      "summarise",
+      "synthesise",
+      "personalise",
+      "finalise"
+    ];
+    SUMMARISE_BATCHES_PER_ADVANCE = 4;
   }
 });
 
@@ -2423,19 +2382,62 @@ router.post("/api/admin/cycle/trigger", isAdmin, async (req, res) => {
       action: `admin.cycle.triggered.${mode}`,
       userId: user.id
     });
-    const { runDailyCycle: runDailyCycle2 } = await Promise.resolve().then(() => (init_dailyCycle(), dailyCycle_exports));
-    runDailyCycle2(mode).catch((err) => console.error("[cycle] Trigger failed:", err));
+    const { initCycle: initCycle2 } = await Promise.resolve().then(() => (init_dailyCycle(), dailyCycle_exports));
+    const { cycleLogId, alreadyComplete } = await initCycle2(mode);
+    if (alreadyComplete) {
+      return res.json({ message: "Cycle already complete for today.", mode, cycleLogId, done: true });
+    }
+    scheduleAdvance(req, cycleLogId);
     const messages = {
-      "full": "Full daily cycle triggered. New/missing sources will be fetched, then summarise + synthesise.",
-      "fetch-only": "Fetch-only triggered. New/missing sources will be fetched and stored. No summarisation.",
-      "resummarize": "Re-summarise triggered. Existing posts will be re-processed by Haiku + Sonnet.",
-      "resynthesize": "Re-synthesise triggered. Existing summaries will be re-aggregated by Sonnet."
+      "full": "Full daily cycle triggered. Running step-by-step.",
+      "fetch-only": "Fetch-only triggered. Fetching missing sources.",
+      "resummarize": "Re-summarise triggered. Re-running Haiku + Sonnet.",
+      "resynthesize": "Re-synthesise triggered. Re-running Sonnet only."
     };
-    res.json({ message: messages[mode], mode });
+    res.json({ message: messages[mode], mode, cycleLogId });
   } catch (err) {
-    res.status(500).json({ error: "Failed to trigger cycle" });
+    console.error("[cycle] trigger failed:", err);
+    res.status(500).json({ error: "Failed to trigger cycle", detail: err?.message });
   }
 });
+router.post("/api/admin/cycle/advance", async (req, res) => {
+  try {
+    const bearer = req.headers.authorization?.replace("Bearer ", "");
+    const sessionAdmin = req.isAuthenticated() && req.user?.email === process.env.ADMIN_EMAIL;
+    const validSecret = process.env.CRON_SECRET && bearer === process.env.CRON_SECRET;
+    if (!sessionAdmin && !validSecret) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const cycleLogId = req.query.id || req.body?.cycleLogId;
+    if (!cycleLogId) return res.status(400).json({ error: "cycleLogId required" });
+    const { advanceCycle: advanceCycle2 } = await Promise.resolve().then(() => (init_dailyCycle(), dailyCycle_exports));
+    const result = await advanceCycle2(cycleLogId);
+    if (!result.done && !result.error) {
+      scheduleAdvance(req, cycleLogId);
+    }
+    res.json(result);
+  } catch (err) {
+    console.error("[cycle] advance endpoint failed:", err);
+    res.status(500).json({ error: "Advance failed", detail: err?.message });
+  }
+});
+function scheduleAdvance(req, cycleLogId) {
+  const baseUrl = getBaseUrl(req);
+  const secret = process.env.CRON_SECRET;
+  const url = `${baseUrl}/api/admin/cycle/advance?id=${encodeURIComponent(cycleLogId)}`;
+  const headers = { "Content-Type": "application/json" };
+  if (secret) headers["Authorization"] = `Bearer ${secret}`;
+  fetch(url, { method: "POST", headers }).catch((err) => {
+    console.error(`[cycle] scheduleAdvance fetch failed for ${cycleLogId}:`, err?.message);
+  });
+}
+function getBaseUrl(req) {
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL;
+  const proto = req.headers["x-forwarded-proto"] || req.protocol || "http";
+  const host = req.get("host") || "localhost:5000";
+  return `${proto}://${host}`;
+}
 router.get("/api/posts/today", isAuthenticated, async (req, res) => {
   try {
     const province = req.query.province;
@@ -2497,10 +2499,19 @@ router.put("/api/admin/prompts/:id", isAdmin, async (req, res) => {
     res.status(500).json({ error: "Failed to update prompt" });
   }
 });
-router.get("/api/admin/cycle/progress", isAdmin, async (_req, res) => {
+router.get("/api/admin/cycle/progress", isAdmin, async (req, res) => {
   try {
-    const { getCycleProgress: getCycleProgress2 } = await Promise.resolve().then(() => (init_dailyCycle(), dailyCycle_exports));
-    const progress = getCycleProgress2();
+    const { loadCycleProgress: loadCycleProgress2 } = await Promise.resolve().then(() => (init_dailyCycle(), dailyCycle_exports));
+    const progress = await loadCycleProgress2();
+    if (progress && progress.status === "in_progress") {
+      const log = await getTodaysCycleLog();
+      const lastAdvance = log?.lastAdvanceAt ? new Date(log.lastAdvanceAt).getTime() : 0;
+      const stalledFor = Date.now() - lastAdvance;
+      if (stalledFor > 6e4 && log) {
+        console.log(`[cycle] stall detected (${stalledFor}ms) \u2014 re-scheduling advance for ${log.id}`);
+        scheduleAdvance(req, log.id);
+      }
+    }
     res.json(progress);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch progress" });
@@ -2532,11 +2543,16 @@ router.get("/api/cron/daily-cycle", async (req, res) => {
     return res.status(401).json({ error: "Unauthorized" });
   }
   try {
-    const { runDailyCycle: runDailyCycle2 } = await Promise.resolve().then(() => (init_dailyCycle(), dailyCycle_exports));
-    runDailyCycle2("full").catch((err) => console.error("[cron] Cycle failed:", err));
-    res.json({ message: "Daily cycle triggered via cron" });
+    const { initCycle: initCycle2 } = await Promise.resolve().then(() => (init_dailyCycle(), dailyCycle_exports));
+    const { cycleLogId, alreadyComplete } = await initCycle2("full");
+    if (alreadyComplete) {
+      return res.json({ message: "Cycle already complete for today", done: true });
+    }
+    scheduleAdvance(req, cycleLogId);
+    res.json({ message: "Daily cycle triggered via cron", cycleLogId });
   } catch (err) {
-    res.status(500).json({ error: "Failed to trigger cycle" });
+    console.error("[cron] failed:", err);
+    res.status(500).json({ error: "Failed to trigger cycle", detail: err?.message });
   }
 });
 var routes_default = router;

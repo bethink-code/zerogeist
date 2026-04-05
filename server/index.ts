@@ -113,16 +113,32 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   });
 });
 
-// Daily cycle scheduler
+// Daily cycle scheduler (local dev only — on Vercel the cycle is driven by
+// the Vercel cron → /api/cron/daily-cycle → self-chaining advance endpoints).
 import cron from "node-cron";
-import { runDailyCycle } from "./dailyCycle.js";
 
 const cronExpression = process.env.DAILY_CYCLE_CRON || "0 3 * * *";
 const cronTimezone = process.env.DAILY_CYCLE_TIMEZONE || "Africa/Johannesburg";
+const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:5000";
 
-cron.schedule(cronExpression, () => {
+cron.schedule(cronExpression, async () => {
   console.log("[cron] Triggering daily cycle...");
-  runDailyCycle().catch((err) => console.error("[cron] Daily cycle failed:", err));
+  try {
+    const { initCycle } = await import("./dailyCycle.js");
+    const { cycleLogId, alreadyComplete } = await initCycle("full");
+    if (alreadyComplete) {
+      console.log("[cron] Cycle already complete for today.");
+      return;
+    }
+    const secret = process.env.CRON_SECRET;
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (secret) headers["Authorization"] = `Bearer ${secret}`;
+    fetch(`${baseUrl}/api/admin/cycle/advance?id=${encodeURIComponent(cycleLogId)}`, {
+      method: "POST", headers,
+    }).catch((err: any) => console.error("[cron] advance fetch failed:", err?.message));
+  } catch (err: any) {
+    console.error("[cron] Daily cycle init failed:", err?.message);
+  }
 }, { timezone: cronTimezone });
 
 console.log(`[cron] Daily cycle scheduled: ${cronExpression} (${cronTimezone})`);
